@@ -1,6 +1,7 @@
 name: Fork Build
 
-# Builds runnable Linux x64 and Windows x64 binaries of the fork on GitHub-hosted runners.
+# Builds runnable Linux x64 and Windows x64 binaries of the fork on GitHub-hosted runners,
+# and publishes them as a GitHub Release on every push to main.
 # The upstream workflows target Microsoft's self-hosted runner pools, which
 # are not available to forks.
 
@@ -72,13 +73,13 @@ jobs:
         run: npm run gulp vscode-linux-x64-min
 
       - name: Archive binary
-        run: tar -czf code-oss-linux-x64.tar.gz -C .. VSCode-linux-x64
+        run: tar -czf nighthawk-linux-x64.tar.gz -C .. VSCode-linux-x64
 
       - name: Upload binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: code-oss-linux-x64
-          path: code-oss-linux-x64.tar.gz
+          name: nighthawk-linux-x64
+          path: nighthawk-linux-x64.tar.gz
           retention-days: 14
 
   windows-x64:
@@ -159,3 +160,35 @@ jobs:
           name: nighthawk-win32-x64
           path: nighthawk-win32-x64.zip
           retention-days: 14
+
+  release:
+    name: Publish release
+    if: github.repository != 'microsoft/vscode' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: [linux-x64, windows-x64]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          version=$(node -p "require('./package.json').version")
+          tag="v${version}-build.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Nighthawk ${version} (build ${GITHUB_RUN_NUMBER})" \
+            --notes "Built from ${GITHUB_SHA}.
+
+          - Windows x64: download nighthawk-win32-x64.zip, unzip it and run VSCode-win32-x64\\Nighthawk.exe. It is not code-signed yet, so Windows asks you to confirm (More info, then Run anyway).
+          - Linux x64: download nighthawk-linux-x64.tar.gz, extract it and run VSCode-linux-x64/nighthawk."
