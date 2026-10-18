@@ -1,0 +1,610 @@
+{
+  "name": "nighthawk-notes",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.0.0",
+  "publisher": "vscode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onFileSystem:nighthawk-team",
+    "onUri"
+  ],
+  "main": "./out/extension",
+  "contributes": {
+    "configuration": {
+      "title": "%displayName%",
+      "properties": {
+        "nighthawk.notes.vaultPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.vaultPath%",
+          "scope": "machine"
+        },
+        "nighthawk.notes.dailyNotes.folder": {
+          "type": "string",
+          "default": "Daily",
+          "description": "%config.dailyNotes.folder%"
+        },
+        "nighthawk.notes.dailyNotes.format": {
+          "type": "string",
+          "default": "YYYY-MM-DD",
+          "description": "%config.dailyNotes.format%"
+        },
+        "nighthawk.notes.dailyNotes.template": {
+          "type": "string",
+          "default": "",
+          "description": "%config.dailyNotes.template%"
+        },
+        "nighthawk.notes.templatesFolder": {
+          "type": "string",
+          "default": "Templates",
+          "description": "%config.templatesFolder%"
+        },
+        "nighthawk.notes.server.url": {
+          "type": "string",
+          "default": "http://localhost:8787",
+          "description": "%config.server.url%",
+          "scope": "application"
+        },
+        "nighthawk.notes.teams.syncInterval": {
+          "type": "number",
+          "default": 15,
+          "minimum": 0,
+          "description": "%config.teams.syncInterval%"
+        },
+        "nighthawk.notes.teams.inviteExpiryHours": {
+          "type": "number",
+          "default": 168,
+          "minimum": 1,
+          "description": "%config.teams.inviteExpiryHours%"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nighthawk-notes",
+          "icon": "$(notebook)",
+          "title": "%container.title%"
+        }
+      ]
+    },
+    "views": {
+      "nighthawk-notes": [
+        {
+          "id": "nighthawk.notes.vault",
+          "name": "%view.vault%"
+        },
+        {
+          "id": "nighthawk.notes.teams",
+          "name": "%view.teams%"
+        },
+        {
+          "id": "nighthawk.notes.backlinks",
+          "name": "%view.backlinks%"
+        },
+        {
+          "id": "nighthawk.notes.tags",
+          "name": "%view.tags%",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "nighthawk.notes.vault",
+        "contents": "%welcome.vault%"
+      },
+      {
+        "view": "nighthawk.notes.teams",
+        "contents": "%welcome.teams.signedOut%",
+        "when": "!nighthawk.notes.signedIn"
+      },
+      {
+        "view": "nighthawk.notes.teams",
+        "contents": "%welcome.teams.noTeams%",
+        "when": "nighthawk.notes.signedIn && !nighthawk.notes.hasTeams"
+      }
+    ],
+    "commands": [
+      {
+        "command": "nighthawk.notes.newNote",
+        "title": "%command.newNote%",
+        "category": "%category%",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nighthawk.notes.newNoteFromTemplate",
+        "title": "%command.newNoteFromTemplate%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.newFolder",
+        "title": "%command.newFolder%",
+        "category": "%category%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "nighthawk.notes.openDailyNote",
+        "title": "%command.openDailyNote%",
+        "category": "%category%",
+        "icon": "$(calendar)"
+      },
+      {
+        "command": "nighthawk.notes.quickOpen",
+        "title": "%command.quickOpen%",
+        "category": "%category%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "nighthawk.notes.rename",
+        "title": "%command.rename%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.delete",
+        "title": "%command.delete%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.showGraph",
+        "title": "%command.showGraph%",
+        "category": "%category%",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "nighthawk.notes.showTeamGraph",
+        "title": "%command.showTeamGraph%",
+        "category": "%category%",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "nighthawk.notes.changeVault",
+        "title": "%command.changeVault%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.openVaultInWindow",
+        "title": "%command.openVaultInWindow%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.revealVault",
+        "title": "%command.revealVault%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.refresh",
+        "title": "%command.refresh%",
+        "category": "%category%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nighthawk.notes.followLink",
+        "title": "%command.followLink%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.signIn",
+        "title": "%command.teams.signIn%",
+        "category": "%category%",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "nighthawk.notes.teams.register",
+        "title": "%command.teams.register%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.signOut",
+        "title": "%command.teams.signOut%",
+        "category": "%category%",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "nighthawk.notes.teams.setServer",
+        "title": "%command.teams.setServer%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.refresh",
+        "title": "%command.teams.refresh%",
+        "category": "%category%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nighthawk.notes.teams.createTeam",
+        "title": "%command.teams.createTeam%",
+        "category": "%category%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nighthawk.notes.teams.renameTeam",
+        "title": "%command.teams.renameTeam%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.deleteTeam",
+        "title": "%command.teams.deleteTeam%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.leaveTeam",
+        "title": "%command.teams.leaveTeam%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.invite",
+        "title": "%command.teams.invite%",
+        "category": "%category%",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "nighthawk.notes.teams.copyInvite",
+        "title": "%command.teams.copyInvite%",
+        "category": "%category%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "nighthawk.notes.teams.revokeInvite",
+        "title": "%command.teams.revokeInvite%",
+        "category": "%category%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nighthawk.notes.teams.join",
+        "title": "%command.teams.join%",
+        "category": "%category%",
+        "icon": "$(link)"
+      },
+      {
+        "command": "nighthawk.notes.teams.changeRole",
+        "title": "%command.teams.changeRole%",
+        "category": "%category%",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "nighthawk.notes.teams.removeMember",
+        "title": "%command.teams.removeMember%",
+        "category": "%category%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "nighthawk.notes.teams.newNote",
+        "title": "%command.teams.newNote%",
+        "category": "%category%",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nighthawk.notes.teams.newFolder",
+        "title": "%command.teams.newFolder%",
+        "category": "%category%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "nighthawk.notes.teams.renameNote",
+        "title": "%command.teams.renameNote%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.teams.deleteNote",
+        "title": "%command.teams.deleteNote%",
+        "category": "%category%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nighthawk.notes.teams.shareNote",
+        "title": "%command.teams.shareNote%",
+        "category": "%category%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "nighthawk.notes.followLink",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.showTeamGraph",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.copyInvite",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.revokeInvite",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.changeRole",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.removeMember",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.deleteNote",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.renameNote",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.newFolder",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.notes.teams.signIn",
+          "when": "!nighthawk.notes.signedIn"
+        },
+        {
+          "command": "nighthawk.notes.teams.register",
+          "when": "!nighthawk.notes.signedIn"
+        },
+        {
+          "command": "nighthawk.notes.teams.signOut",
+          "when": "nighthawk.notes.signedIn"
+        },
+        {
+          "command": "nighthawk.notes.rename",
+          "when": "resourceLangId == markdown"
+        },
+        {
+          "command": "nighthawk.notes.delete",
+          "when": "resourceScheme == file && resourceLangId == markdown"
+        },
+        {
+          "command": "nighthawk.notes.teams.shareNote",
+          "when": "nighthawk.notes.signedIn && resourceScheme == file && resourceLangId == markdown"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "nighthawk.notes.newNote",
+          "when": "view == nighthawk.notes.vault",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.notes.newFolder",
+          "when": "view == nighthawk.notes.vault",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nighthawk.notes.openDailyNote",
+          "when": "view == nighthawk.notes.vault",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nighthawk.notes.showGraph",
+          "when": "view == nighthawk.notes.vault",
+          "group": "navigation@4"
+        },
+        {
+          "command": "nighthawk.notes.quickOpen",
+          "when": "view == nighthawk.notes.vault",
+          "group": "navigation@5"
+        },
+        {
+          "command": "nighthawk.notes.newNoteFromTemplate",
+          "when": "view == nighthawk.notes.vault",
+          "group": "1_create@1"
+        },
+        {
+          "command": "nighthawk.notes.changeVault",
+          "when": "view == nighthawk.notes.vault",
+          "group": "2_vault@1"
+        },
+        {
+          "command": "nighthawk.notes.openVaultInWindow",
+          "when": "view == nighthawk.notes.vault",
+          "group": "2_vault@2"
+        },
+        {
+          "command": "nighthawk.notes.revealVault",
+          "when": "view == nighthawk.notes.vault",
+          "group": "2_vault@3"
+        },
+        {
+          "command": "nighthawk.notes.refresh",
+          "when": "view == nighthawk.notes.vault",
+          "group": "3_refresh@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.createTeam",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.signedIn",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.join",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.signedIn",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.refresh",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.signedIn",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nighthawk.notes.teams.signIn",
+          "when": "view == nighthawk.notes.teams && !nighthawk.notes.signedIn",
+          "group": "1_account@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.register",
+          "when": "view == nighthawk.notes.teams && !nighthawk.notes.signedIn",
+          "group": "1_account@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.signOut",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.signedIn",
+          "group": "1_account@3"
+        },
+        {
+          "command": "nighthawk.notes.teams.setServer",
+          "when": "view == nighthawk.notes.teams",
+          "group": "1_account@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nighthawk.notes.newNote",
+          "when": "view == nighthawk.notes.vault && viewItem == notesFolder",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.newNote",
+          "when": "view == nighthawk.notes.vault && viewItem == notesFolder",
+          "group": "1_create@1"
+        },
+        {
+          "command": "nighthawk.notes.newFolder",
+          "when": "view == nighthawk.notes.vault && viewItem == notesFolder",
+          "group": "1_create@2"
+        },
+        {
+          "command": "nighthawk.notes.delete",
+          "when": "view == nighthawk.notes.vault && viewItem == notesFolder",
+          "group": "3_modify@2"
+        },
+        {
+          "command": "nighthawk.notes.rename",
+          "when": "view == nighthawk.notes.vault && viewItem == note",
+          "group": "3_modify@1"
+        },
+        {
+          "command": "nighthawk.notes.delete",
+          "when": "view == nighthawk.notes.vault && viewItem == note",
+          "group": "3_modify@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.shareNote",
+          "when": "view == nighthawk.notes.vault && viewItem == note && nighthawk.notes.signedIn",
+          "group": "4_share@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.invite",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /role-(owner|admin)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.newNote",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /role-(owner|admin|editor)/",
+          "group": "1_create@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.invite",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /role-(owner|admin)/",
+          "group": "2_members@1"
+        },
+        {
+          "command": "nighthawk.notes.showTeamGraph",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^team /",
+          "group": "3_view@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.renameTeam",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /role-(owner|admin)/",
+          "group": "4_manage@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.leaveTeam",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^team /",
+          "group": "4_manage@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.deleteTeam",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /role-owner/",
+          "group": "4_manage@3"
+        },
+        {
+          "command": "nighthawk.notes.teams.newNote",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^(teamNotes|teamFolder) editable/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.newNote",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^(teamNotes|teamFolder) editable/",
+          "group": "1_create@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.newFolder",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^(teamNotes|teamFolder) editable/",
+          "group": "1_create@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.renameNote",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^teamNote editable/",
+          "group": "3_modify@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.deleteNote",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^(teamNote|teamFolder) editable/",
+          "group": "3_modify@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.invite",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^(teamMembers admin|teamInvites)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.changeRole",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^teamMember manageable/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.removeMember",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^teamMember manageable/",
+          "group": "inline@2"
+        },
+        {
+          "command": "nighthawk.notes.teams.copyInvite",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^teamInvite$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.revokeInvite",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^teamInvite$/",
+          "group": "inline@2"
+        }
+      ]
+    },
+    "resourceLabelFormatters": [
+      {
+        "scheme": "nighthawk-team",
+        "formatting": {
+          "label": "${path}",
+          "separator": "/"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "npx gulp compile-extension:nighthawk-notes && npm run build-webview",
+    "watch": "npm run build-webview && npx gulp watch-extension:nighthawk-notes",
+    "build-webview": "node ./esbuild.webview.mts",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "24.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/berkayydurdu/vscode.git"
+  }
+}
