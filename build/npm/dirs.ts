@@ -40,6 +40,7 @@ export const dirs = [
 	'extensions/merge-conflict',
 	'extensions/mermaid-markdown-features',
 	'extensions/microsoft-authentication',
+	'extensions/nighthawk-agent',
 	'extensions/nighthawk-notes',
 	'extensions/notebook-renderers',
 	'extensions/npm',
