@@ -5,12 +5,12 @@
 
 import type { ItemKind, Priority } from './api';
 import { t } from './l10n';
-import { h, icon } from './util';
+import { h, icon, svgElement, svgShapes } from './util';
 
-function svg(markup: string, className: string, size = 14): SVGElement {
-	const wrapper = document.createElement('span');
-	wrapper.innerHTML = `<svg class="${className}" width="${size}" height="${size}" viewBox="0 0 14 14" aria-hidden="true">${markup}</svg>`;
-	return wrapper.firstChild as SVGElement;
+function svg(markup: string, classNames: string[], size = 14): SVGElement {
+	const el = svgElement('svg', { width: size, height: size, viewBox: '0 0 14 14', 'aria-hidden': 'true' }, ...svgShapes(markup));
+	el.classList.add(...classNames);
+	return el;
 }
 
 /** The round workflow icon: empty for to do, filling up as work moves along. */
@@ -36,20 +36,20 @@ export function statusIcon(kind: ItemKind, status: string, size = 14): SVGElemen
 		case 'rfc:rejected': markup = filled('M4.9 4.9l4.2 4.2M9.1 4.9l-4.2 4.2'); break;
 		default: markup = filled('M4.5 7h5'); break;
 	}
-	return svg(markup, `status-icon status-${kind === 'rfc' ? 'rfc' : 'ticket'}-${status}`, size);
+	return svg(markup, ['status-icon', `status-${kind === 'rfc' ? 'rfc' : 'ticket'}-${status}`], size);
 }
 
 /** Linear-style priority bars; urgent is a filled warning square. */
 export function priorityIcon(priority: Priority, size = 14): SVGElement {
 	if (priority === 'urgent') {
-		return svg('<rect x="1" y="1" width="12" height="12" rx="3" fill="currentColor"/><path d="M7 3.8v4M7 10v.2" stroke="var(--vscode-editor-background)" stroke-width="1.7" stroke-linecap="round"/>', 'priority-icon priority-urgent', size);
+		return svg('<rect x="1" y="1" width="12" height="12" rx="3" fill="currentColor"/><path d="M7 3.8v4M7 10v.2" stroke="var(--vscode-editor-background)" stroke-width="1.7" stroke-linecap="round"/>', ['priority-icon', 'priority-urgent'], size);
 	}
 	if (priority === 'none') {
-		return svg('<path d="M2.5 7h2M6 7h2M9.5 7h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', 'priority-icon priority-none', size);
+		return svg('<path d="M2.5 7h2M6 7h2M9.5 7h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>', ['priority-icon', 'priority-none'], size);
 	}
 	const level = priority === 'high' ? 3 : priority === 'medium' ? 2 : 1;
 	const bars = [0, 1, 2].map(i => `<rect x="${2 + i * 3.75}" y="${9 - i * 3}" width="2.5" height="${3 + i * 3}" rx=".6" fill="currentColor" opacity="${i < level ? 1 : 0.28}"/>`).join('');
-	return svg(bars, `priority-icon priority-${priority}`, size);
+	return svg(bars, ['priority-icon', `priority-${priority}`], size);
 }
 
 export function kindIcon(kind: ItemKind, size = 14): SVGElement {

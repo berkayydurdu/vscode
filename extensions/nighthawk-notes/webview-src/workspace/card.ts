@@ -8,7 +8,7 @@ import { kindIcon, labelChip, priorityIcon, reportError, statusIcon } from './co
 import { t } from './l10n';
 import { isClosed, priorityLabel, statusLabel, type Model } from './model';
 import { pickPeople, pickPriority, pickStatus } from './pickers';
-import { avatar, avatarStack, formatMinutes, h, icon, isoDate, shortDate } from './util';
+import { avatar, avatarStack, formatMinutes, h, icon, isoDate, shortDate, svgElement } from './util';
 
 /** Due date chip, red when overdue and amber when due within two days. */
 export function dueChip(item: Item): HTMLElement | null {
@@ -43,10 +43,12 @@ export function timeChip(item: Item): HTMLElement | null {
 }
 
 function progressRing(fraction: number): SVGElement {
-	const wrapper = document.createElement('span');
 	const circumference = 2 * Math.PI * 4.5;
-	wrapper.innerHTML = `<svg class="progress-ring" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="1.6"/><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="${(fraction * circumference).toFixed(2)} ${circumference.toFixed(2)}" transform="rotate(-90 6 6)" stroke-linecap="round"/></svg>`;
-	return wrapper.firstChild as SVGElement;
+	const circle = { cx: 6, cy: 6, r: 4.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 };
+	return svgElement('svg', { class: 'progress-ring', width: 12, height: 12, viewBox: '0 0 12 12' },
+		svgElement('circle', { ...circle, 'stroke-opacity': 0.25 }),
+		svgElement('circle', { ...circle, 'stroke-dasharray': `${(fraction * circumference).toFixed(2)} ${circumference.toFixed(2)}`, transform: 'rotate(-90 6 6)', 'stroke-linecap': 'round' }),
+	);
 }
 
 /**

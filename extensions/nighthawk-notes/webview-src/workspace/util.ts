@@ -90,10 +90,35 @@ const ICON_PATHS: Record<string, string> = {
 	people: '<circle cx="6" cy="5.5" r="2.25"/><path d="M1.75 13.5c.5-2.2 2.2-3.4 4.25-3.4s3.75 1.2 4.25 3.4"/><circle cx="11.5" cy="5" r="1.75"/><path d="M11 9.75c1.7 0 3 .9 3.4 2.75"/>',
 };
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Creates an SVG element with the given attributes and children. */
+export function svgElement(tag: string, attrs: Record<string, string | number>, ...children: SVGElement[]): SVGElement {
+	const el = document.createElementNS(SVG_NS, tag);
+	for (const [key, value] of Object.entries(attrs)) {
+		el.setAttribute(key, String(value));
+	}
+	for (const child of children) {
+		el.appendChild(child);
+	}
+	return el;
+}
+
+/** Turns static `<tag attr="value"/>` shape markup into SVG elements. */
+export function svgShapes(markup: string): SVGElement[] {
+	const shapes: SVGElement[] = [];
+	for (const match of markup.matchAll(/<(?<tag>[a-z]+)(?<attrs>[^>]*?)\/>/g)) {
+		const attrs: Record<string, string> = {};
+		for (const attr of (match.groups?.attrs ?? '').matchAll(/(?<name>[a-z-]+)="(?<value>[^"]*)"/g)) {
+			attrs[attr.groups!.name] = attr.groups!.value;
+		}
+		shapes.push(svgElement(match.groups!.tag, attrs));
+	}
+	return shapes;
+}
+
 export function icon(name: keyof typeof ICON_PATHS | string, size = 16): SVGElement {
-	const wrapper = document.createElement('span');
-	wrapper.innerHTML = `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] ?? ''}</svg>`;
-	return wrapper.firstChild as SVGElement;
+	return svgElement('svg', { class: 'icon', width: size, height: size, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, ...svgShapes(ICON_PATHS[name] ?? ''));
 }
 
 // --- people
