@@ -24,8 +24,6 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Attrs |
 			// Both, so a field can tell whether it was edited since.
 			el.defaultValue = String(value);
 			el.value = String(value);
-		} else if (key === 'html') {
-			el.innerHTML = String(value);
 		} else if (Reflect.has(el, key) && key !== 'list' && key !== 'style') {
 			(el as unknown as Record<string, unknown>)[key] = value;
 		} else {
@@ -216,28 +214,51 @@ export function timeAgo(timestamp: number): string {
 
 // --- markdown
 
-function escapeHtml(text: string): string {
-	return text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[c]!);
+/** Parsed Markdown: plain strings are text, never markup. */
+export type MdNode = string | { tag: string; class?: string; href?: string; note?: string; children: MdNode[] };
+
+function el(tag: string, children: MdNode[], extra?: { class?: string; href?: string; note?: string }): MdNode {
+	return { tag, children, ...extra };
 }
 
-function inline(text: string): string {
-	return escapeHtml(text)
-		.replace(/`([^`]+)`/g, '<code>$1</code>')
-		.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-		.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
-		.replace(/~~([^~]+)~~/g, '<del>$1</del>')
-		.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target: string, label?: string) => `<a class="wikilink" href="#" data-note="${target}">${label ?? target}</a>`)
-		.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>');
+const INLINE = /`(?<code>[^`]+)`|\*\*(?<strong>[^*]+)\*\*|\*(?<em>[^*]+)\*|~~(?<del>[^~]+)~~|\[\[(?<target>[^\]|]+)(?:\|(?<label>[^\]]+))?\]\]|\[(?<text>[^\]]+)\]\((?<url>https?:\/\/[^)\s]+)\)/g;
+
+function inline(text: string): MdNode[] {
+	const out: MdNode[] = [];
+	let last = 0;
+	for (const match of text.matchAll(INLINE)) {
+		if (match.index > last) {
+			out.push(text.slice(last, match.index));
+		}
+		const g = match.groups!;
+		if (g.code !== undefined) {
+			out.push(el('code', [g.code]));
+		} else if (g.strong !== undefined) {
+			out.push(el('strong', inline(g.strong)));
+		} else if (g.em !== undefined) {
+			out.push(el('em', inline(g.em)));
+		} else if (g.del !== undefined) {
+			out.push(el('del', inline(g.del)));
+		} else if (g.target !== undefined) {
+			out.push(el('a', [g.label ?? g.target], { class: 'wikilink', href: '#', note: g.target }));
+		} else {
+			out.push(el('a', inline(g.text), { href: g.url }));
+		}
+		last = match.index + match[0].length;
+	}
+	if (last < text.length) {
+		out.push(text.slice(last));
+	}
+	return out;
 }
 
 /**
- * Renders the Markdown people write in descriptions, RFCs and comments:
+ * Parses the Markdown people write in descriptions, RFCs and comments:
  * headings, lists, task lists, quotes, code blocks, tables and rules.
- * Everything is escaped first, so the output is safe to insert.
  */
-export function renderMarkdown(source: string): string {
+export function parseMarkdown(source: string): MdNode[] {
 	const lines = source.replace(/\r\n/g, '\n').split('\n');
-	const out: string[] = [];
+	const out: MdNode[] = [];
 	let i = 0;
 	while (i < lines.length) {
 		const line = lines[i];
@@ -248,17 +269,17 @@ export function renderMarkdown(source: string): string {
 				code.push(lines[i++]);
 			}
 			i++;
-			out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+			out.push(el('pre', [el('code', [code.join('\n')])]));
 			continue;
 		}
-		const heading = /^(#{1,4})\s+(.*)$/.exec(line);
+		const heading = /^(?<hashes>#{1,4})\s+(?<text>.*)$/.exec(line);
 		if (heading) {
-			out.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`);
+			out.push(el(`h${heading.groups!.hashes.length}`, inline(heading.groups!.text)));
 			i++;
 			continue;
 		}
 		if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
-			out.push('<hr>');
+			out.push(el('hr', []));
 			i++;
 			continue;
 		}
@@ -267,7 +288,7 @@ export function renderMarkdown(source: string): string {
 			while (i < lines.length && /^\s*>/.test(lines[i])) {
 				quote.push(lines[i++].replace(/^\s*>\s?/, ''));
 			}
-			out.push(`<blockquote>${renderMarkdown(quote.join('\n'))}</blockquote>`);
+			out.push(el('blockquote', parseMarkdown(quote.join('\n'))));
 			continue;
 		}
 		if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
@@ -278,37 +299,66 @@ export function renderMarkdown(source: string): string {
 			while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
 				rows.push(cells(lines[i++]));
 			}
-			out.push(`<table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+			out.push(el('table', [
+				el('thead', [el('tr', head.map(c => el('th', inline(c))))]),
+				el('tbody', rows.map(r => el('tr', r.map(c => el('td', inline(c)))))),
+			]));
 			continue;
 		}
-		const listMatch = /^\s*([-*+]|\d+\.)\s+/.exec(line);
+		const listMatch = /^\s*(?<marker>[-*+]|\d+\.)\s+/.exec(line);
 		if (listMatch) {
-			const ordered = /\d/.test(listMatch[1]);
-			const items: string[] = [];
+			const ordered = /\d/.test(listMatch.groups!.marker);
+			const items: MdNode[] = [];
 			while (i < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[i])) {
 				const text = lines[i++].replace(/^\s*([-*+]|\d+\.)\s+/, '');
-				const task = /^\[( |x|X)\]\s+(.*)$/.exec(text);
+				const task = /^\[(?<mark> |x|X)\]\s+(?<text>.*)$/.exec(text);
 				items.push(task
-					? `<li class="task"><span class="md-check${task[1] === ' ' ? '' : ' done'}"></span>${inline(task[2])}</li>`
-					: `<li>${inline(text)}</li>`);
+					? el('li', [el('span', [], { class: task.groups!.mark === ' ' ? 'md-check' : 'md-check done' }), ...inline(task.groups!.text)], { class: 'task' })
+					: el('li', inline(text)));
 			}
-			out.push(ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`);
+			out.push(el(ordered ? 'ol' : 'ul', items));
 			continue;
 		}
 		if (!line.trim()) {
 			i++;
 			continue;
 		}
-		const paragraph: string[] = [];
-		while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\s*```|\s*>|\s*([-*+]|\d+\.)\s+|\s*\|)/.test(lines[i])) {
-			paragraph.push(inline(lines[i++]));
+		const paragraph: MdNode[] = [];
+		while (i < lines.length && lines[i].trim() && (!paragraph.length || !/^(#{1,4}\s|\s*```|\s*>|\s*([-*+]|\d+\.)\s+|\s*\|)/.test(lines[i]))) {
+			if (paragraph.length) {
+				paragraph.push(el('br', []));
+			}
+			paragraph.push(...inline(lines[i++]));
 		}
-		if (!paragraph.length) {
-			paragraph.push(inline(lines[i++]));
-		}
-		out.push(`<p>${paragraph.join('<br>')}</p>`);
+		out.push(el('p', paragraph));
 	}
-	return out.join('');
+	return out;
+}
+
+function toDom(node: MdNode): Node {
+	if (typeof node === 'string') {
+		return document.createTextNode(node);
+	}
+	const element = document.createElement(node.tag);
+	if (node.class) {
+		element.className = node.class;
+	}
+	if (node.href) {
+		element.setAttribute('href', node.href);
+	}
+	if (node.note) {
+		element.dataset.note = node.note;
+	}
+	node.children.forEach(child => element.appendChild(toDom(child)));
+	return element;
+}
+
+/** Renders Markdown as DOM nodes; text always stays text. */
+export function renderMarkdown(source: string, className = 'markdown'): HTMLElement {
+	const container = document.createElement('div');
+	container.className = className;
+	parseMarkdown(source).forEach(node => container.appendChild(toDom(node)));
+	return container;
 }
 
 /** A short plain-text excerpt of Markdown, for cards. */

@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { isAllowedRequest } from '../src/core/teamApi.ts';
-import { formatMinutes, parseDuration, renderMarkdown, startOfWeek } from '../webview-src/workspace/util.ts';
+import { formatMinutes, parseDuration, parseMarkdown, startOfWeek } from '../webview-src/workspace/util.ts';
 
 describe('team workspace', () => {
 	it('only lets the page call its own team', () => {
@@ -35,10 +35,11 @@ describe('team workspace', () => {
 		assert.equal(startOfWeek(new Date(2026, 9, 18)).getDate(), 12);
 	});
 
-	it('escapes HTML in Markdown', () => {
-		assert.equal(
-			renderMarkdown('## Plan\n- [x] <b>done</b>\n\n<img src=x onerror=alert(1)> **bold**'),
-			'<h2>Plan</h2><ul><li class="task"><span class="md-check done"></span>&lt;b&gt;done&lt;/b&gt;</li></ul><p>&lt;img src=x onerror=alert(1)&gt; <strong>bold</strong></p>',
-		);
+	it('keeps HTML in Markdown as text', () => {
+		assert.deepEqual(parseMarkdown('## Plan\n- [x] <b>done</b>\n\n<img src=x onerror=alert(1)> **bold** [[Spec|the spec]]'), [
+			{ tag: 'h2', children: ['Plan'] },
+			{ tag: 'ul', children: [{ tag: 'li', class: 'task', children: [{ tag: 'span', class: 'md-check done', children: [] }, '<b>done</b>'] }] },
+			{ tag: 'p', children: ['<img src=x onerror=alert(1)> ', { tag: 'strong', children: ['bold'] }, ' ', { tag: 'a', class: 'wikilink', href: '#', note: 'Spec', children: ['the spec'] }] },
+		]);
 	});
 });

@@ -256,11 +256,22 @@ export class DetailPanel {
 				));
 		}
 		const content = item.body
-			? h('div', { class: 'markdown', html: renderMarkdown(item.body), ondblclick: () => { if (this.model.canEdit) { this.editingBody = item.body; this.update(); } } })
+			? this.editable(renderMarkdown(item.body), item)
 			: this.model.canEdit
 				? h('button', { class: 'placeholder', onclick: () => { this.editingBody = isRfc ? RFC_TEMPLATE : ''; this.update(); } }, isRfc ? t('Start from the RFC template...') : t('Add a description...'))
 				: h('div', { class: 'muted' }, t('No description.'));
 		return h('section', { class: 'detail-section' }, heading, content);
+	}
+
+	/** Double-clicking the rendered description starts editing it. */
+	private editable(content: HTMLElement, item: Item): HTMLElement {
+		content.addEventListener('dblclick', () => {
+			if (this.model.canEdit) {
+				this.editingBody = item.body;
+				this.update();
+			}
+		});
+		return content;
 	}
 
 	private checklist(item: Item): HTMLElement | null {
@@ -414,7 +425,7 @@ export class DetailPanel {
 						avatar(person),
 						h('div', { class: 'review-main' },
 							h('div', { class: 'review-head' }, h('strong', null, person?.name ?? t('Former member')), verdictBadge(review), review ? h('span', { class: 'muted small' }, timeAgo(review.createdAt)) : null),
-							review?.body ? h('div', { class: 'markdown small', html: renderMarkdown(review.body) }) : null,
+							review?.body ? renderMarkdown(review.body, 'markdown small') : null,
 						),
 					);
 				}))
@@ -468,7 +479,7 @@ export class DetailPanel {
 									},
 								}, icon('trash', 12)) : null,
 							),
-							h('div', { class: 'markdown', html: renderMarkdown(comment.body) }),
+							renderMarkdown(comment.body),
 						),
 					);
 				}),
