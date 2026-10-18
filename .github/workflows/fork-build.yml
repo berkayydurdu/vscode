@@ -1,6 +1,6 @@
 name: Fork Build
 
-# Builds a runnable Linux x64 binary of the fork on GitHub-hosted runners.
+# Builds runnable Linux x64 and Windows x64 binaries of the fork on GitHub-hosted runners.
 # The upstream workflows target Microsoft's self-hosted runner pools, which
 # are not available to forks.
 
@@ -79,4 +79,83 @@ jobs:
         with:
           name: code-oss-linux-x64
           path: code-oss-linux-x64.tar.gz
+          retention-days: 14
+
+  windows-x64:
+    name: Windows x64
+    if: github.repository != 'microsoft/vscode'
+    runs-on: windows-2022
+    timeout-minutes: 150
+    env:
+      VSCODE_ARCH: x64
+      npm_config_arch: x64
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+
+          # Patch Electron/v8 headers before native modules are built.
+          exec { node build/npm/preinstall.ts }
+
+          for ($i = 1; $i -le 3; $i++) {
+            try {
+              exec { npm ci }
+              break
+            }
+            catch {
+              if ($i -eq 3) {
+                Write-Error "npm ci failed too many times"
+                throw
+              }
+              Write-Host "npm ci failed $i, trying again..."
+            }
+          }
+        env:
+          npm_config_foreground_scripts: "true"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Ensure Copilot SDK layout
+        working-directory: extensions/copilot
+        shell: bash
+        run: |
+          if [ ! -f node_modules/@github/copilot/sdk/index.js ]; then
+            npx tsx ./script/postinstall.ts
+          fi
+
+      # The packaging step calls signtool.exe, which ships with the Windows SDK
+      # on the runner but is not on PATH.
+      - name: Add signtool to PATH
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found in the Windows SDK" }
+          Write-Host "Using $($signtool.FullName)"
+          Add-Content $env:GITHUB_PATH $signtool.DirectoryName
+
+      - name: Build Windows x64 binary
+        run: npm run gulp vscode-win32-x64-min
+
+      - name: Archive binary
+        shell: pwsh
+        run: Compress-Archive -Path ..\VSCode-win32-x64 -DestinationPath nighthawk-win32-x64.zip
+
+      - name: Upload binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nighthawk-win32-x64
+          path: nighthawk-win32-x64.zip
           retention-days: 14
