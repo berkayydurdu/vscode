@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
@@ -40,10 +40,9 @@ export function hashToken(token: string): string {
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function newInviteCode(): string {
-	const bytes = randomBytes(12);
 	let code = '';
-	for (const byte of bytes) {
-		code += INVITE_ALPHABET[byte % INVITE_ALPHABET.length];
+	for (let i = 0; i < 12; i++) {
+		code += INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)];
 	}
 	return `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8, 12)}`;
 }
