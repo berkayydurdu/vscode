@@ -1,6 +1,6 @@
 {
 	"displayName": "Nighthawk Notes",
-	"description": "Linked Markdown notes with backlinks, tags, a graph view and shared team spaces.",
+	"description": "Linked Markdown notes with backlinks, tags and a graph view, plus team spaces with boards, tickets, time tracking and RFCs.",
 	"container.title": "Notes",
 	"view.vault": "My Notes",
 	"view.backlinks": "Backlinks",
@@ -40,6 +40,7 @@
 	"command.teams.renameNote": "Rename Note and Update Links",
 	"command.teams.deleteNote": "Delete",
 	"command.teams.shareNote": "Copy Note to Team...",
+	"command.teams.openWorkspace": "Open Team Workspace",
 	"category": "Notes",
 	"welcome.vault": "Your notes are plain Markdown files in a folder on your computer, so you can also open them with any other app.\n[New Note](command:nighthawk.notes.newNote)\n[Open Daily Note](command:nighthawk.notes.openDailyNote)\nAlready use Obsidian? [Use an existing vault](command:nighthawk.notes.changeVault).",
 	"welcome.teams.signedOut": "Share notes with your team. Sign in to a Nighthawk Notes server, or run your own from the notes-server folder of the Nighthawk repository.\n[Sign In](command:nighthawk.notes.teams.signIn)\n[Create Account](command:nighthawk.notes.teams.register)\n[Change Server](command:nighthawk.notes.teams.setServer)",

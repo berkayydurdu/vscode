@@ -172,6 +172,12 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "nighthawk.notes.teams.openWorkspace",
+        "title": "%command.teams.openWorkspace%",
+        "category": "%category%",
+        "icon": "$(project)"
+      },
+      {
         "command": "nighthawk.notes.changeVault",
         "title": "%command.changeVault%",
         "category": "%category%"
@@ -362,6 +368,10 @@
           "when": "nighthawk.notes.signedIn"
         },
         {
+          "command": "nighthawk.notes.teams.openWorkspace",
+          "when": "nighthawk.notes.signedIn"
+        },
+        {
           "command": "nighthawk.notes.rename",
           "when": "resourceLangId == markdown"
         },
@@ -511,6 +521,16 @@
           "command": "nighthawk.notes.teams.invite",
           "when": "view == nighthawk.notes.teams && viewItem =~ /role-(owner|admin)/",
           "group": "2_members@1"
+        },
+        {
+          "command": "nighthawk.notes.teams.openWorkspace",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^team /",
+          "group": "inline@0"
+        },
+        {
+          "command": "nighthawk.notes.teams.openWorkspace",
+          "when": "view == nighthawk.notes.teams && viewItem =~ /^team /",
+          "group": "3_view@0"
         },
         {
           "command": "nighthawk.notes.showTeamGraph",

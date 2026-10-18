@@ -93,6 +93,11 @@ export class NotesClient {
 		return json as T;
 	}
 
+	/** Sends a request on behalf of the team workspace, which checks the path. */
+	call<T>(method: string, path: string, body?: unknown): Promise<T> {
+		return this.request<T>(method, path, body);
+	}
+
 	info() {
 		return this.request<{ name: string; version: number; allowRegistration: boolean }>('GET', '/api/info');
 	}

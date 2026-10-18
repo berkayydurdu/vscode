@@ -9,11 +9,13 @@ import { GraphPanel } from './graph';
 import { FOLLOW_LINK_COMMAND, followLink, registerLanguageFeatures, renameNote } from './language';
 import { NoteIndex, type IndexedNote } from './noteIndex';
 import { Account } from './teams/account';
+import type { Team } from './teams/client';
 import { InviteUriHandler, registerTeamCommands } from './teams/teamCommands';
 import { TEAM_SCHEME, TeamFileSystem, teamCollection, teamNoteUri } from './teams/teamFileSystem';
 import { VAULT_COLLECTION, Vault } from './vault';
 import { BacklinksProvider, TagsProvider, VaultTreeProvider } from './views/vaultViews';
-import { TeamsTreeProvider } from './views/teamsView';
+import { roleLabel, TeamsTreeProvider } from './views/teamsView';
+import { WorkspacePanel } from './workspace';
 
 const encoder = new TextEncoder();
 
@@ -219,6 +221,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			GraphPanel.show(context, index, teamCollection(node.team.id), vscode.l10n.t('Graph: {0}', node.team.name));
 		}
 	});
+
+	command('nighthawk.notes.teams.openWorkspace', async (node?: { team?: Team }) => {
+		let team = node?.team;
+		if (!team) {
+			if (!account.user) {
+				await vscode.commands.executeCommand('nighthawk.notes.teams.signIn');
+				if (!account.user) {
+					return;
+				}
+			}
+			const teams = teamFs.allTeams();
+			if (!teams.length) {
+				vscode.window.showInformationMessage(vscode.l10n.t('Create or join a team first.'));
+				return;
+			}
+			team = teams.length === 1 ? teams[0] : (await vscode.window.showQuickPick(
+				teams.map(candidate => ({ label: candidate.name, description: roleLabel(candidate.role), team: candidate })),
+				{ placeHolder: vscode.l10n.t('Open the workspace of which team?') },
+			))?.team;
+		}
+		if (team) {
+			WorkspacePanel.show(context, account, teamFs, team);
+		}
+	});
+	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() });
 
 	try {
 		await vault.start();

@@ -5,6 +5,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
+import { WorkStore } from './work.ts';
 
 export type Role = 'owner' | 'admin' | 'editor' | 'viewer';
 
@@ -140,11 +141,14 @@ export class ConflictError extends Error { }
 export class Store {
 
 	private readonly db: DatabaseSync;
+	/** Tasks, bugs, RFCs, comments, time logs and reviews. */
+	readonly work: WorkStore;
 
 	constructor(file: string) {
 		this.db = new DatabaseSync(file);
 		this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 		this.db.exec(SCHEMA);
+		this.work = new WorkStore(this.db, () => this.nextSeq());
 	}
 
 	close(): void {

@@ -6,5 +6,5 @@ tsconfig*.json
 esbuild*.mts
 package-lock.json
 test/**
-graph-src/**
+webview-src/**
 .gitignore
