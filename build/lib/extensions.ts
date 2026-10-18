@@ -479,11 +479,32 @@ export function packageCopilotExtensionStream(): Stream {
 	const productionDependencies = getProductionDependencies('extensions/copilot');
 	const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
 
+	// build/.moduleignore strips @github/copilot (the Agent Host uses the runtime from
+	// @github/copilot-sdk), but the copilot extension loads @github/copilot/sdk at runtime
+	// and prepareBuiltInCopilotRipgrepShim requires it, so re-add the files the
+	// extension's .vscodeignore ships.
+	const copilotSdkBase = 'extensions/copilot/node_modules/@github/copilot';
+	const copilotSdkSrc = [
+		`${copilotSdkBase}/package.json`,
+		`${copilotSdkBase}/sdk/**/package.json`,
+		`${copilotSdkBase}/sdk/*.js`,
+		`${copilotSdkBase}/sdk/worker/*.js`,
+		`${copilotSdkBase}/sdk/sharp/**`,
+		`${copilotSdkBase}/sdk/builtin-skills/*/*.yaml`,
+		`${copilotSdkBase}/sdk/definitions/*.yaml`,
+		`${copilotSdkBase}/sdk/definitions/sidekick/*.yaml`,
+		`${copilotSdkBase}/sdk/prebuilds/*/*.node`,
+		`${copilotSdkBase}/sdk/prebuilds/*/spawn-helper`,
+		`${copilotSdkBase}/sdk/prebuilds/*/conpty/**`,
+		`${copilotSdkBase}/sdk/tgrep/bin/*/**`,
+	];
+
 	return es.merge(
 		localExtensionsStream,
 		gulp.src(dependenciesSrc, { base: '.' })
 			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)))
+			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`))),
+		gulp.src(copilotSdkSrc, { base: '.', dot: true, allowEmpty: true })
 	).pipe(util2.setExecutableBit(['**/*.sh']));
 }
 
