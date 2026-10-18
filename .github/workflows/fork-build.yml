@@ -133,6 +133,19 @@ jobs:
             npx tsx ./script/postinstall.ts
           fi
 
+      # The packaging step calls signtool.exe, which ships with the Windows SDK
+      # on the runner but is not on PATH.
+      - name: Add signtool to PATH
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found in the Windows SDK" }
+          Write-Host "Using $($signtool.FullName)"
+          Add-Content $env:GITHUB_PATH $signtool.DirectoryName
+
       - name: Build Windows x64 binary
         run: npm run gulp vscode-win32-x64-min
 
