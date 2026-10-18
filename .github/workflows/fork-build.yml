@@ -183,6 +183,24 @@ jobs:
           path: nighthawk-win32-x64.zip
           retention-days: 14
 
+      # Some bundled files have paths too long for Windows' built-in unzip when
+      # extracted under a typical Downloads folder, so also ship an installer.
+      - name: Build Windows x64 user installer
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+          exec { npm run gulp vscode-win32-x64-inno-updater }
+          exec { npm run gulp vscode-win32-x64-user-setup }
+          Move-Item .build\win32-x64\user-setup\VSCodeSetup.exe NighthawkUserSetup-x64.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nighthawk-win32-x64-setup
+          path: NighthawkUserSetup-x64.exe
+          retention-days: 14
+
   release:
     name: Publish release
     if: github.repository != 'microsoft/vscode' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -212,5 +230,6 @@ jobs:
             --title "Nighthawk ${version} (build ${GITHUB_RUN_NUMBER})" \
             --notes "Built from ${GITHUB_SHA}.
 
-          - Windows x64: download nighthawk-win32-x64.zip, unzip it and run VSCode-win32-x64\\Nighthawk.exe. It is not code-signed yet, so Windows asks you to confirm (More info, then Run anyway).
+          - Windows x64: download NighthawkUserSetup-x64.exe and run it. It is not code-signed yet, so Windows asks you to confirm (More info, then Run anyway).
+          - Windows x64 portable: extract nighthawk-win32-x64.zip into a short folder such as C:\\nh (some paths inside are too long for Windows' unzip under Downloads), then run VSCode-win32-x64\\Nighthawk.exe.
           - Linux x64: download nighthawk-linux-x64.tar.gz, extract it and run VSCode-linux-x64/nighthawk."
