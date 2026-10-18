@@ -1,0 +1,10 @@
+.vscode/**
+src/**
+out/**
+tsconfig*.json
+**/*.tsbuildinfo
+esbuild*.mts
+package-lock.json
+test/**
+graph-src/**
+.gitignore

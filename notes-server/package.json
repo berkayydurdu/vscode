@@ -1,0 +1,15 @@
+{
+  "name": "nighthawk-notes-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hostable server for Nighthawk Notes: accounts, teams, invites and shared notes.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test \"test/**/*.test.ts\""
+  }
+}

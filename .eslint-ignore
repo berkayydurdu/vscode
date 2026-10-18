@@ -32,6 +32,7 @@
 **/extensions/mermaid-markdown-features/notebook-out/**
 **/extensions/notebook-renderers/renderer-out/index.js
 **/extensions/simple-browser/media/index.js
+**/extensions/nighthawk-notes/media/*.js
 **/extensions/terminal-suggest/src/completions/upstream/**
 **/extensions/terminal-suggest/src/shell/zshBuiltinsCache.ts
 **/extensions/terminal-suggest/src/shell/fishBuiltinsCache.ts
