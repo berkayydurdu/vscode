@@ -92,8 +92,9 @@ export function hygiene(some: NodeJS.ReadWriteStream | string[] | undefined, run
 	const productJson = es.through(function (file: VinylFile) {
 		const product = JSON.parse(file.contents!.toString('utf8'));
 
-		if (product.extensionsGallery) {
-			console.error(`product.json: Contains 'extensionsGallery'`);
+		// The fork uses Open VSX; Microsoft's marketplace may only be used by Microsoft products
+		if (/marketplace\.visualstudio\.com/i.test(JSON.stringify(product.extensionsGallery ?? {}))) {
+			console.error(`product.json: 'extensionsGallery' points at the Visual Studio Marketplace`);
 			errorCount++;
 		}
 

@@ -132,32 +132,44 @@ interface RenderRequest {
 	readonly background?: string;
 }
 
+// Runs inside the page; kept as source text because the build scripts are compiled without DOM types.
+const pageScript = `
+	const icon = document.getElementById('icon');
+	window.iconReady = icon.decode();
+	window.renderIcon = ({ width, height, iconSize, background }) => {
+		const canvas = document.createElement('canvas');
+		canvas.width = width;
+		canvas.height = height;
+		const ctx = canvas.getContext('2d');
+		if (background) {
+			ctx.fillStyle = background;
+			ctx.fillRect(0, 0, width, height);
+		}
+		ctx.imageSmoothingQuality = 'high';
+		ctx.drawImage(icon, Math.round((width - iconSize) / 2), Math.round((height - iconSize) / 2), iconSize, iconSize);
+		return {
+			png: canvas.toDataURL('image/png').split(',')[1],
+			rgba: Array.from(ctx.getImageData(0, 0, width, height).data),
+		};
+	};
+`;
+
+interface IconPage {
+	readonly iconReady: Promise<void>;
+	renderIcon(request: RenderRequest): { png: string; rgba: number[] };
+}
+
 async function createRenderer(svg: string): Promise<{ render(request: RenderRequest): Promise<Rendered>; dispose(): Promise<void> }> {
 	const { chromium } = await import('@playwright/test');
 	// Set CHROMIUM_PATH to use an existing Chromium instead of the one `npx playwright install chromium` downloads
 	const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 	const page = await browser.newPage();
-	await page.setContent(`<img id="icon" src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}">`);
-	await page.waitForFunction(() => (document.getElementById('icon') as HTMLImageElement).complete);
+	await page.setContent(`<img id="icon" src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}"><script>${pageScript}</script>`);
+	await page.evaluate(() => (globalThis as unknown as IconPage).iconReady);
 
 	return {
 		async render(request) {
-			const result = await page.evaluate(({ width, height, iconSize, background }) => {
-				const canvas = document.createElement('canvas');
-				canvas.width = width;
-				canvas.height = height;
-				const ctx = canvas.getContext('2d')!;
-				if (background) {
-					ctx.fillStyle = background;
-					ctx.fillRect(0, 0, width, height);
-				}
-				ctx.imageSmoothingQuality = 'high';
-				ctx.drawImage(document.getElementById('icon') as HTMLImageElement, Math.round((width - iconSize) / 2), Math.round((height - iconSize) / 2), iconSize, iconSize);
-				return {
-					png: canvas.toDataURL('image/png').split(',')[1],
-					rgba: Array.from(ctx.getImageData(0, 0, width, height).data),
-				};
-			}, request);
+			const result = await page.evaluate(request => (globalThis as unknown as IconPage).renderIcon(request), request);
 			return { png: Buffer.from(result.png, 'base64'), rgba: Buffer.from(result.rgba), width: request.width, height: request.height };
 		},
 		dispose: () => browser.close(),
