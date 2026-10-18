@@ -6,6 +6,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AttemptLimiter, hashPassword, hashToken, newInviteCode, newToken, verifyPassword } from './auth.ts';
 import { ConflictError, isInviteUsable, isRole, roleAtLeast, type Role, type Store, type User } from './store.ts';
+import { isValidStatus, ITEM_KINDS, PRIORITIES, VERDICTS, type ChecklistEntry, type ItemChange, type ItemKind, type Priority, type Verdict } from './work.ts';
 
 export interface AppOptions {
 	/** The address people use to reach this server, used in invite links. */
@@ -340,6 +341,256 @@ export function createApp(store: Store, options: AppOptions): Server {
 		return { ok: true };
 	});
 
+	// --- work items: tasks, bugs and RFCs
+
+	function parseItemChange(ctx: Context, kind: ItemKind): ItemChange {
+		const body = ctx.body;
+		const change: ItemChange = {};
+		const memberIds = new Set(store.members(ctx.params.teamId).map(m => m.userId));
+		if (body.title !== undefined) {
+			const title = requireString(body, 'title', 300).trim();
+			if (!title) {
+				throw new HttpError(400, 'Enter a title');
+			}
+			change.title = title;
+		}
+		if (body.body !== undefined) {
+			change.body = requireString(body, 'body', 200_000);
+		}
+		if (body.status !== undefined) {
+			if (typeof body.status !== 'string' || !isValidStatus(kind, body.status)) {
+				throw new HttpError(400, `Invalid status for a ${kind}`);
+			}
+			change.status = body.status;
+		}
+		if (body.priority !== undefined) {
+			if (!(PRIORITIES as readonly unknown[]).includes(body.priority)) {
+				throw new HttpError(400, 'Priority must be urgent, high, medium, low or none');
+			}
+			change.priority = body.priority as Priority;
+		}
+		for (const key of ['assignees', 'reviewers'] as const) {
+			if (body[key] !== undefined) {
+				const ids = stringArray(body[key], key, 50, 100);
+				if (ids.some(id => !memberIds.has(id))) {
+					throw new HttpError(400, `Only team members can be ${key}`);
+				}
+				change[key] = [...new Set(ids)];
+			}
+		}
+		if (body.labels !== undefined) {
+			change.labels = [...new Set(stringArray(body.labels, 'labels', 20, 40).map(l => l.trim()).filter(Boolean))];
+		}
+		if (body.dueDate !== undefined) {
+			if (body.dueDate !== null && (typeof body.dueDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.dueDate))) {
+				throw new HttpError(400, 'dueDate must be YYYY-MM-DD or null');
+			}
+			change.dueDate = body.dueDate as string | null;
+		}
+		if (body.estimateMinutes !== undefined) {
+			const value = body.estimateMinutes;
+			if (value !== null && (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 1_000_000)) {
+				throw new HttpError(400, 'estimateMinutes must be a whole number of minutes or null');
+			}
+			change.estimateMinutes = value as number | null;
+		}
+		if (body.checklist !== undefined) {
+			if (!Array.isArray(body.checklist) || body.checklist.length > 200) {
+				throw new HttpError(400, 'checklist must be a list of at most 200 entries');
+			}
+			change.checklist = body.checklist.map((entry: unknown): ChecklistEntry => {
+				const e = entry as Record<string, unknown>;
+				if (typeof e?.id !== 'string' || typeof e.text !== 'string' || typeof e.done !== 'boolean' || e.text.length > 500 || e.id.length > 100) {
+					throw new HttpError(400, 'checklist entries need id, text and done');
+				}
+				return { id: e.id, text: e.text, done: e.done };
+			});
+		}
+		return change;
+	}
+
+	function requireItem(ctx: Context) {
+		const item = store.work.getItem(ctx.params.teamId, ctx.params.itemId);
+		if (!item || item.deleted) {
+			throw new HttpError(404, 'Item not found');
+		}
+		return item;
+	}
+
+	route('GET', '/api/teams/:teamId/items', true, ctx => {
+		requireRole(ctx, 'viewer');
+		const since = Number(ctx.query.get('since') ?? 0);
+		return store.work.listItems(ctx.params.teamId, Number.isFinite(since) && since > 0 ? since : 0);
+	});
+
+	route('POST', '/api/teams/:teamId/items', true, ctx => {
+		requireRole(ctx, 'editor');
+		const kind = ctx.body.kind ?? 'task';
+		if (!(ITEM_KINDS as readonly unknown[]).includes(kind)) {
+			throw new HttpError(400, 'kind must be task, bug or rfc');
+		}
+		const change = parseItemChange(ctx, kind as ItemKind);
+		if (!change.title) {
+			throw new HttpError(400, 'Enter a title');
+		}
+		ctx.res.statusCode = 201;
+		return { item: store.work.createItem(ctx.params.teamId, requireUser(ctx).id, kind as ItemKind, { ...change, title: change.title }) };
+	});
+
+	route('GET', '/api/teams/:teamId/items/:itemId', true, ctx => {
+		requireRole(ctx, 'viewer');
+		const item = requireItem(ctx);
+		return {
+			item,
+			comments: store.work.comments(item.id),
+			worklogs: store.work.worklogs(ctx.params.teamId, { itemId: item.id }),
+			reviews: store.work.reviews(item.id),
+		};
+	});
+
+	route('PATCH', '/api/teams/:teamId/items/:itemId', true, ctx => {
+		requireRole(ctx, 'editor');
+		const current = requireItem(ctx);
+		let kind = current.kind;
+		if (ctx.body.kind !== undefined && ctx.body.kind !== current.kind) {
+			// Tasks and bugs share a workflow; RFCs have their own.
+			if (current.kind === 'rfc' || ctx.body.kind === 'rfc' || !(ITEM_KINDS as readonly unknown[]).includes(ctx.body.kind)) {
+				throw new HttpError(400, 'Only tasks and bugs can be turned into each other');
+			}
+			kind = ctx.body.kind as ItemKind;
+		}
+		const change = parseItemChange(ctx, kind);
+		change.kind = kind;
+		const baseVersion = typeof ctx.body.baseVersion === 'number' ? ctx.body.baseVersion : undefined;
+		const result = store.work.updateItem(ctx.params.teamId, current.id, requireUser(ctx).id, change, baseVersion);
+		if (result === 'conflict') {
+			throw new HttpError(409, 'Someone else changed this item; reload and try again');
+		}
+		return { item: result };
+	});
+
+	route('DELETE', '/api/teams/:teamId/items/:itemId', true, ctx => {
+		requireRole(ctx, 'editor');
+		const item = requireItem(ctx);
+		store.work.deleteItem(ctx.params.teamId, item.id, requireUser(ctx).id);
+		return { ok: true };
+	});
+
+	route('POST', '/api/teams/:teamId/items/:itemId/comments', true, ctx => {
+		requireRole(ctx, 'viewer');
+		const item = requireItem(ctx);
+		const body = requireString(ctx.body, 'body', 20_000).trim();
+		if (!body) {
+			throw new HttpError(400, 'Write a comment first');
+		}
+		ctx.res.statusCode = 201;
+		return { comment: store.work.addComment(item.id, requireUser(ctx).id, body) };
+	});
+
+	route('DELETE', '/api/teams/:teamId/items/:itemId/comments/:commentId', true, ctx => {
+		const role = requireRole(ctx, 'viewer');
+		const item = requireItem(ctx);
+		const comment = store.work.getComment(ctx.params.commentId);
+		if (!comment || comment.itemId !== item.id) {
+			throw new HttpError(404, 'Comment not found');
+		}
+		if (comment.userId !== requireUser(ctx).id && !roleAtLeast(role, 'admin')) {
+			throw new HttpError(403, 'Only the author or an admin can delete a comment');
+		}
+		store.work.deleteComment(comment.id);
+		return { ok: true };
+	});
+
+	route('POST', '/api/teams/:teamId/items/:itemId/reviews', true, ctx => {
+		requireRole(ctx, 'editor');
+		const item = requireItem(ctx);
+		if (item.kind !== 'rfc') {
+			throw new HttpError(400, 'Only RFCs are reviewed');
+		}
+		const verdict = ctx.body.verdict;
+		if (!(VERDICTS as readonly unknown[]).includes(verdict)) {
+			throw new HttpError(400, 'verdict must be approve, request_changes or comment');
+		}
+		store.work.setReview(item.id, requireUser(ctx).id, verdict as Verdict, optionalString(ctx.body, 'body', 20_000) ?? '');
+		return { reviews: store.work.reviews(item.id) };
+	});
+
+	// --- time tracking
+
+	route('GET', '/api/teams/:teamId/worklogs', true, ctx => {
+		requireRole(ctx, 'viewer');
+		const date = (key: string) => {
+			const value = ctx.query.get(key) ?? undefined;
+			if (value !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+				throw new HttpError(400, `${key} must be YYYY-MM-DD`);
+			}
+			return value;
+		};
+		return {
+			worklogs: store.work.worklogs(ctx.params.teamId, {
+				from: date('from'),
+				to: date('to'),
+				userId: ctx.query.get('userId') ?? undefined,
+				itemId: ctx.query.get('itemId') ?? undefined,
+			}),
+		};
+	});
+
+	function parseWorklog(body: Record<string, unknown>, partial: boolean) {
+		const result: { minutes?: number; date?: string; note?: string } = {};
+		if (body.minutes !== undefined || !partial) {
+			const minutes = body.minutes;
+			if (typeof minutes !== 'number' || !Number.isInteger(minutes) || minutes <= 0 || minutes > 24 * 60) {
+				throw new HttpError(400, 'minutes must be a whole number between 1 and 1440');
+			}
+			result.minutes = minutes;
+		}
+		if (body.date !== undefined || !partial) {
+			if (typeof body.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+				throw new HttpError(400, 'date must be YYYY-MM-DD');
+			}
+			result.date = body.date;
+		}
+		if (body.note !== undefined) {
+			result.note = optionalString(body, 'note', 1000) ?? '';
+		}
+		return result;
+	}
+
+	route('POST', '/api/teams/:teamId/worklogs', true, ctx => {
+		requireRole(ctx, 'editor');
+		const itemId = requireString(ctx.body, 'itemId', 100);
+		const item = store.work.getItem(ctx.params.teamId, itemId);
+		if (!item || item.deleted) {
+			throw new HttpError(404, 'Item not found');
+		}
+		const log = parseWorklog(ctx.body, false);
+		ctx.res.statusCode = 201;
+		return { worklog: store.work.addWorklog(ctx.params.teamId, item.id, requireUser(ctx).id, log.minutes!, log.date!, log.note ?? '') };
+	});
+
+	function requireOwnWorklog(ctx: Context) {
+		const role = requireRole(ctx, 'editor');
+		const worklog = store.work.getWorklog(ctx.params.worklogId);
+		if (!worklog || worklog.teamId !== ctx.params.teamId) {
+			throw new HttpError(404, 'Time entry not found');
+		}
+		if (worklog.userId !== requireUser(ctx).id && !roleAtLeast(role, 'admin')) {
+			throw new HttpError(403, 'Only the person who logged the time or an admin can change it');
+		}
+		return worklog;
+	}
+
+	route('PATCH', '/api/teams/:teamId/worklogs/:worklogId', true, ctx => {
+		const worklog = requireOwnWorklog(ctx);
+		return { worklog: store.work.updateWorklog(worklog.id, parseWorklog(ctx.body, true)) };
+	});
+
+	route('DELETE', '/api/teams/:teamId/worklogs/:worklogId', true, ctx => {
+		store.work.deleteWorklog(requireOwnWorklog(ctx).id);
+		return { ok: true };
+	});
+
 	// --- invite landing page, for links opened in a browser
 
 	route('GET', '/invite/:code', false, ctx => {
@@ -476,6 +727,13 @@ function optionalString(body: Record<string, unknown>, key: string, maxLength: n
 		throw new HttpError(400, `${key} is too long`);
 	}
 	return value;
+}
+
+function stringArray(value: unknown, key: string, maxItems: number, maxLength: number): string[] {
+	if (!Array.isArray(value) || value.length > maxItems || value.some(v => typeof v !== 'string' || v.length > maxLength)) {
+		throw new HttpError(400, `${key} must be a list of at most ${maxItems} strings`);
+	}
+	return value as string[];
 }
 
 function optionalPositiveNumber(body: Record<string, unknown>, key: string): number | undefined {

@@ -10,6 +10,7 @@ import { TeamFileSystem, teamNoteUri } from '../teams/teamFileSystem';
 
 export type TeamNode =
 	| { kind: 'team'; team: Team }
+	| { kind: 'workspace'; team: Team }
 	| { kind: 'notes'; team: Team }
 	| { kind: 'entry'; team: Team; uri: vscode.Uri; isFolder: boolean }
 	| { kind: 'members'; team: Team }
@@ -59,7 +60,7 @@ export class TeamsTreeProvider implements vscode.TreeDataProvider<TeamNode>, vsc
 		const team = element.team;
 		switch (element.kind) {
 			case 'team': {
-				const children: TeamNode[] = [{ kind: 'notes', team }, { kind: 'members', team }];
+				const children: TeamNode[] = [{ kind: 'workspace', team }, { kind: 'notes', team }, { kind: 'members', team }];
 				if (ROLE_RANK[team.role] >= ROLE_RANK.admin) {
 					children.push({ kind: 'invites', team });
 				}
@@ -104,6 +105,15 @@ export class TeamsTreeProvider implements vscode.TreeDataProvider<TeamNode>, vsc
 				item.iconPath = new vscode.ThemeIcon('organization');
 				item.description = roleLabel(element.team.role);
 				item.contextValue = `team role-${element.team.role}`;
+				return item;
+			}
+			case 'workspace': {
+				const item = new vscode.TreeItem(vscode.l10n.t('Workspace'), vscode.TreeItemCollapsibleState.None);
+				item.id = `team/${element.team.id}/workspace`;
+				item.iconPath = new vscode.ThemeIcon('project');
+				item.description = vscode.l10n.t('Board, tickets, time, RFCs');
+				item.contextValue = 'teamWorkspace';
+				item.command = { command: 'nighthawk.notes.teams.openWorkspace', title: vscode.l10n.t('Open Team Workspace'), arguments: [element] };
 				return item;
 			}
 			case 'notes': {
