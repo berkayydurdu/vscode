@@ -13,19 +13,24 @@ type Attrs = Record<string, unknown> & { class?: string | Record<string, boolean
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Attrs | null, ...children: Child[]): HTMLElementTagNameMap[K] {
 	const el = document.createElement(tag);
 	for (const [key, value] of Object.entries(attrs ?? {})) {
+		if (key === 'spellcheck') {
+			el.spellcheck = !!value;
+			continue;
+		}
 		if (value === undefined || value === null || value === false) {
 			continue;
 		}
-		if (key.startsWith('on') && typeof value === 'function') {
-			el.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
+		if (key.startsWith('on')) {
+			// Only real listeners; never handler strings.
+			if (typeof value === 'function') {
+				el.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
+			}
 		} else if (key === 'class' && typeof value === 'object') {
 			el.className = Object.entries(value as Record<string, boolean>).filter(([, on]) => on).map(([name]) => name).join(' ');
 		} else if (key === 'value' && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
 			// Both, so a field can tell whether it was edited since.
 			el.defaultValue = String(value);
 			el.value = String(value);
-		} else if (Reflect.has(el, key) && key !== 'list' && key !== 'style') {
-			(el as unknown as Record<string, unknown>)[key] = value;
 		} else {
 			el.setAttribute(key, value === true ? '' : String(value));
 		}
