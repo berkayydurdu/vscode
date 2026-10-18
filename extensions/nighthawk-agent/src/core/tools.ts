@@ -836,25 +836,86 @@ const todoTool: Tool = {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: '\'', nbsp: ' ' };
 
-/** A readable text version of an HTML page. */
+/** Elements whose content is never readable text. */
+const HIDDEN_ELEMENTS = new Set(['script', 'style', 'noscript', 'svg', 'head', 'template']);
+const LINE_BREAK_CLOSERS = /^(p|div|h[1-6]|tr|li|pre|section|article|ul|ol|table|blockquote)$/;
+
+function decodeEntities(text: string): string {
+	return text.replace(/&(?<code>#x?[0-9a-f]+|\w+);/gi, (match, code: string) => {
+		if (code.startsWith('#x') || code.startsWith('#X')) {
+			return String.fromCodePoint(parseInt(code.slice(2), 16));
+		}
+		if (code.startsWith('#')) {
+			return String.fromCodePoint(Number(code.slice(1)));
+		}
+		return ENTITIES[code.toLowerCase()] ?? match;
+	});
+}
+
+/**
+ * A readable text version of an HTML page, for the model to read. It scans
+ * tags in a single pass instead of stripping them with regular expressions,
+ * so nothing that looks like markup can survive in the output.
+ */
 export function htmlToText(html: string): string {
-	return html
-		.replace(/<(script|style|noscript|svg|head)[\s\S]*?<\/\1>/gi, '')
-		.replace(/<!--[\s\S]*?-->/g, '')
-		.replace(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, text: string) => `${text} (${href})`)
-		.replace(/<h([1-6])[^>]*>/gi, (_, level: string) => `\n\n${'#'.repeat(Number(level))} `)
-		.replace(/<li[^>]*>/gi, '\n- ')
-		.replace(/<(br|\/p|\/div|\/h[1-6]|\/tr|\/li|\/pre|\/section|\/article)[^>]*>/gi, '\n')
-		.replace(/<[^>]+>/g, '')
-		.replace(/&(#x?[0-9a-f]+|\w+);/gi, (match, code: string) => {
-			if (code.startsWith('#x') || code.startsWith('#X')) {
-				return String.fromCodePoint(parseInt(code.slice(2), 16));
+	const out: string[] = [];
+	let hidden: string | undefined;
+	let href: string | undefined;
+	let index = 0;
+	while (index < html.length) {
+		const open = html.indexOf('<', index);
+		if (!hidden) {
+			out.push(decodeEntities(open < 0 ? html.slice(index) : html.slice(index, open)));
+		}
+		if (open < 0) {
+			break;
+		}
+		if (html.startsWith('<!--', open)) {
+			const end = html.indexOf('-->', open + 4);
+			index = end < 0 ? html.length : end + 3;
+			continue;
+		}
+		const close = html.indexOf('>', open);
+		if (close < 0) {
+			break;
+		}
+		index = close + 1;
+		const tag = /^<\s*(?<closing>\/?)\s*(?<name>[a-zA-Z][\w-]*)(?<attributes>[^>]*)>$/.exec(html.slice(open, close + 1));
+		if (!tag?.groups) {
+			continue;
+		}
+		const closing = tag.groups.closing === '/';
+		const name = tag.groups.name.toLowerCase();
+		if (hidden) {
+			if (closing && name === hidden) {
+				hidden = undefined;
 			}
-			if (code.startsWith('#')) {
-				return String.fromCodePoint(Number(code.slice(1)));
+			continue;
+		}
+		if (HIDDEN_ELEMENTS.has(name)) {
+			if (!closing && !tag.groups.attributes.trim().endsWith('/')) {
+				hidden = name;
 			}
-			return ENTITIES[code.toLowerCase()] ?? match;
-		})
+			continue;
+		}
+		if (name === 'a') {
+			if (closing) {
+				if (href) {
+					out.push(` (${href})`);
+				}
+				href = undefined;
+			} else {
+				href = /\shref\s*=\s*"(?<url>[^"]*)"/i.exec(tag.groups.attributes)?.groups?.url;
+			}
+		} else if (!closing && /^h[1-6]$/.test(name)) {
+			out.push(`\n\n${'#'.repeat(Number(name[1]))} `);
+		} else if (!closing && name === 'li') {
+			out.push('\n- ');
+		} else if (name === 'br' || (closing && LINE_BREAK_CLOSERS.test(name))) {
+			out.push('\n');
+		}
+	}
+	return out.join('')
 		.replace(/[ \t]+\n/g, '\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();

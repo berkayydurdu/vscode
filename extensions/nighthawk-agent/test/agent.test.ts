@@ -100,6 +100,7 @@ describe('tools', () => {
 
 	it('converts HTML to text', () => {
 		assert.equal(htmlToText('<html><head><title>x</title></head><body><h1>Title</h1><p>A &amp; <a href="https://x.dev">link</a></p><script>bad()</script></body></html>'), '# Title\nA & link (https://x.dev)');
+		assert.equal(htmlToText('<p>a<scr<script>x</script>ipt>b<!-- <!-- -->c</p><ul><li>one</li></ul>'), 'axipt>bc\n\n- one');
 	});
 });
 
