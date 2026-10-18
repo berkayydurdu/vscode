@@ -1,0 +1,7 @@
+{
+	"name": "Nighthawk",
+	"id": "nighthawk",
+	"reverseDomain": "io.github.berkayydurdu.nighthawk",
+	"repository": "https://github.com/berkayydurdu/vscode",
+	"tileBackgroundColor": "#1E1B4B"
+}
