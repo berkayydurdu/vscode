@@ -9,6 +9,7 @@ import { GraphPanel } from './graph';
 import { FOLLOW_LINK_COMMAND, followLink, registerLanguageFeatures, renameNote } from './language';
 import { NoteIndex, type IndexedNote } from './noteIndex';
 import { Account } from './teams/account';
+import { LocalServer } from './teams/localServer';
 import type { Team } from './teams/client';
 import { InviteUriHandler, registerTeamCommands } from './teams/teamCommands';
 import { TEAM_SCHEME, TeamFileSystem, teamCollection, teamNoteUri } from './teams/teamFileSystem';
@@ -22,7 +23,8 @@ const encoder = new TextEncoder();
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	const index = new NoteIndex();
 	const vault = new Vault(index);
-	const account = new Account(context);
+	const localServer = new LocalServer(context);
+	const account = new Account(context, localServer);
 	const teamFs = new TeamFileSystem(account, index);
 
 	const collectionLabel = (note: IndexedNote): string => note.collection === VAULT_COLLECTION
@@ -41,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	teamsTree.view = teamsView;
 
 	context.subscriptions.push(
+		localServer,
 		index, vault, account, teamFs, vaultTree, backlinks, tags, teamsTree,
 		vaultView, backlinksView, teamsView,
 		vscode.window.registerTreeDataProvider('nighthawk.notes.tags', tags),

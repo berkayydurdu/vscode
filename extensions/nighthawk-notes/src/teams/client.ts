@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { ServerStarter } from './localServer';
+
 // Types mirror notes-server/src/store.ts.
 
 export type Role = 'owner' | 'admin' | 'editor' | 'viewer';
@@ -64,21 +66,33 @@ export class NotesServerError extends Error {
  */
 export class NotesClient {
 
-	constructor(readonly serverUrl: string, private readonly token?: string) { }
+	/**
+	 * @param starter Starts a server when none answers, then the request is
+	 * sent once more.
+	 */
+	constructor(readonly serverUrl: string, private readonly token?: string, private readonly starter?: ServerStarter) { }
 
 	private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+		const send = () => fetch(this.serverUrl.replace(/\/+$/, '') + path, {
+			method,
+			headers: {
+				'Content-Type': 'application/json',
+				...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+			},
+			body: body === undefined ? undefined : JSON.stringify(body),
+		});
 		let response: Response;
 		try {
-			response = await fetch(this.serverUrl.replace(/\/+$/, '') + path, {
-				method,
-				headers: {
-					'Content-Type': 'application/json',
-					...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-				},
-				body: body === undefined ? undefined : JSON.stringify(body),
-			});
+			response = await send();
 		} catch (err) {
-			throw new NotesServerError(0, `Cannot reach the notes server at ${this.serverUrl} (${err.cause?.code ?? err.message})`);
+			if (!await this.starter?.ensureRunning(this.serverUrl)) {
+				throw new NotesServerError(0, `Cannot reach the notes server at ${this.serverUrl} (${err.cause?.code ?? err.message})`);
+			}
+			try {
+				response = await send();
+			} catch (retryErr) {
+				throw new NotesServerError(0, `Cannot reach the notes server at ${this.serverUrl} (${retryErr.cause?.code ?? retryErr.message})`);
+			}
 		}
 		const text = await response.text();
 		let json: any;

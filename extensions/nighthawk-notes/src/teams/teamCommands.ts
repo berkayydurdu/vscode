@@ -8,7 +8,7 @@ import { sanitizeFileName } from '../core/notes';
 import { config } from '../vault';
 import { roleLabel, TeamsTreeProvider, type TeamNode } from '../views/teamsView';
 import { Account } from './account';
-import { NotesClient, parseInvite, ROLE_RANK, type Role, type Team } from './client';
+import { parseInvite, ROLE_RANK, type Role, type Team } from './client';
 import { TeamFileSystem, teamNoteUri, teamPathOf } from './teamFileSystem';
 
 const encoder = new TextEncoder();
@@ -111,7 +111,7 @@ export function registerTeamCommands(account: Account, fs: TeamFileSystem, tree:
 			await config().update('server.url', server, vscode.ConfigurationTarget.Global);
 			await account.restore();
 		}
-		const preview = (await new NotesClient(Account.serverUrl()).previewInvite(code)).invite;
+		const preview = (await account.clientFor().previewInvite(code)).invite;
 		if (!await requireSignIn()) {
 			return;
 		}
@@ -139,7 +139,7 @@ export function registerTeamCommands(account: Account, fs: TeamFileSystem, tree:
 		}),
 
 		run('nighthawk.notes.teams.register', async () => {
-			const info = await new NotesClient(Account.serverUrl()).info();
+			const info = await account.clientFor().info();
 			if (!info.allowRegistration) {
 				throw new Error(vscode.l10n.t('This notes server does not allow new accounts. Ask its administrator.'));
 			}
@@ -162,7 +162,7 @@ export function registerTeamCommands(account: Account, fs: TeamFileSystem, tree:
 				validateInput: v => /^https?:\/\/[^\s/]+/.test(v.trim()) ? undefined : vscode.l10n.t('Enter an http:// or https:// address'),
 			});
 			if (value) {
-				await new NotesClient(value.trim()).info();
+				await account.clientFor(value.trim()).info();
 				await config().update('server.url', value.trim(), vscode.ConfigurationTarget.Global);
 			}
 		}),

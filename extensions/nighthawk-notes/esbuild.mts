@@ -12,6 +12,8 @@ run({
 	platform: 'node',
 	entryPoints: {
 		'extension': path.join(srcDir, 'extension.ts'),
+		// The notes server, which teams start on this machine when no server is set up.
+		'server': path.join(import.meta.dirname, '..', '..', 'notes-server', 'src', 'main.ts'),
 	},
 	srcDir,
 	outdir: outDir,

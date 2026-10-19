@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { config } from '../vault';
 import { NotesClient, NotesServerError, type User } from './client';
+import type { ServerStarter } from './localServer';
 
 const DEFAULT_SERVER = 'http://localhost:8787';
 
@@ -21,8 +22,8 @@ export class Account implements vscode.Disposable {
 	readonly onDidChange = this.onDidChangeEmitter.event;
 	private readonly disposables: vscode.Disposable[] = [];
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		this._client = new NotesClient(Account.serverUrl());
+	constructor(private readonly context: vscode.ExtensionContext, private readonly starter: ServerStarter) {
+		this._client = this.clientFor();
 		this.disposables.push(
 			vscode.workspace.onDidChangeConfiguration(e => {
 				if (e.affectsConfiguration('nighthawk.notes.server.url')) {
@@ -49,6 +50,11 @@ export class Account implements vscode.Disposable {
 		return this._client;
 	}
 
+	/** A client for a server, by default the configured one, that starts the local server when needed. */
+	clientFor(server = Account.serverUrl(), token?: string): NotesClient {
+		return new NotesClient(server, token, this.starter);
+	}
+
 	dispose(): void {
 		this.disposables.forEach(d => d.dispose());
 		this.onDidChangeEmitter.dispose();
@@ -62,7 +68,7 @@ export class Account implements vscode.Disposable {
 	async restore(): Promise<void> {
 		const server = Account.serverUrl();
 		const token = await this.context.secrets.get(this.secretKey(server));
-		this._client = new NotesClient(server, token);
+		this._client = this.clientFor(server, token);
 		this._user = undefined;
 		if (token) {
 			try {
@@ -71,7 +77,7 @@ export class Account implements vscode.Disposable {
 				if (err instanceof NotesServerError && err.status === 401) {
 					// Expired or revoked session.
 					await this.context.secrets.delete(this.secretKey(server));
-					this._client = new NotesClient(server);
+					this._client = this.clientFor(server);
 				} else {
 					// Server unreachable: stay signed in with what we know so a
 					// temporary outage does not log people out.
@@ -83,13 +89,13 @@ export class Account implements vscode.Disposable {
 	}
 
 	async signIn(email: string, password: string): Promise<User> {
-		const result = await new NotesClient(Account.serverUrl()).login(email, password);
+		const result = await this.clientFor().login(email, password);
 		await this.store(result.token, result.user);
 		return result.user;
 	}
 
 	async register(email: string, name: string, password: string): Promise<User> {
-		const result = await new NotesClient(Account.serverUrl()).register(email, name, password);
+		const result = await this.clientFor().register(email, name, password);
 		await this.store(result.token, result.user);
 		return result.user;
 	}
@@ -102,7 +108,7 @@ export class Account implements vscode.Disposable {
 		}
 		await this.context.secrets.delete(this.secretKey());
 		await this.context.globalState.update(this.secretKey(), undefined);
-		this._client = new NotesClient(Account.serverUrl());
+		this._client = this.clientFor();
 		this._user = undefined;
 		await this.updateContext();
 	}
@@ -111,7 +117,7 @@ export class Account implements vscode.Disposable {
 		const server = Account.serverUrl();
 		await this.context.secrets.store(this.secretKey(server), token);
 		await this.context.globalState.update(this.secretKey(server), user);
-		this._client = new NotesClient(server, token);
+		this._client = this.clientFor(server, token);
 		this._user = user;
 		await this.updateContext();
 	}
