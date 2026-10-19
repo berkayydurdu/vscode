@@ -44,6 +44,10 @@ jobs:
         working-directory: extensions/nighthawk-notes
         run: npm test
 
+      - name: Agent extension tests
+        working-directory: extensions/nighthawk-agent
+        run: npm test
+
   linux-x64:
     name: Linux x64
     if: github.repository != 'microsoft/vscode'

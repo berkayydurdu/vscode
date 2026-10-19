@@ -169,6 +169,7 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!extensions/ipynb/notebook-out/**',
 	'!extensions/notebook-renderers/renderer-out/*.js',
 	'!extensions/simple-browser/media/*.js',
+	'!extensions/nighthawk-agent/media/*.js',
 	'!extensions/nighthawk-notes/media/*.js',
 ]);
 

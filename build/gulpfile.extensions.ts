@@ -79,6 +79,7 @@ const compilations = [
 	'extensions/terminal-suggest/tsconfig.json',
 	'extensions/microsoft-authentication/tsconfig.json',
 	'extensions/notebook-renderers/tsconfig.json',
+	'extensions/nighthawk-agent/tsconfig.json',
 	'extensions/nighthawk-notes/tsconfig.json',
 	'extensions/npm/tsconfig.json',
 	'extensions/php-language-features/tsconfig.json',

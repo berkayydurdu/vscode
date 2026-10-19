@@ -1,0 +1,363 @@
+{
+  "name": "nighthawk-agent",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "1.0.0",
+  "publisher": "vscode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%untrusted%",
+      "restrictedConfigurations": [
+        "nighthawk.agent.shell",
+        "nighthawk.agent.hooks",
+        "nighthawk.agent.mcpServers",
+        "nighthawk.agent.permissions.allow"
+      ]
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension",
+  "contributes": {
+    "configuration": [
+      {
+        "title": "%config.ai.title%",
+        "properties": {
+          "nighthawk.ai.endpoints": {
+            "type": "array",
+            "scope": "application",
+            "default": [],
+            "markdownDescription": "%config.ai.endpoints%",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "provider",
+                "baseUrl",
+                "models"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "%config.ai.endpoints.name%"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "anthropic",
+                    "openai"
+                  ],
+                  "enumDescriptions": [
+                    "%config.ai.endpoints.provider.anthropic%",
+                    "%config.ai.endpoints.provider.openai%"
+                  ]
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "description": "%config.ai.endpoints.baseUrl%"
+                },
+                "models": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "%config.ai.endpoints.models%"
+                },
+                "contextWindow": {
+                  "type": "number",
+                  "description": "%config.ai.endpoints.contextWindow%"
+                },
+                "maxOutputTokens": {
+                  "type": "number",
+                  "description": "%config.ai.endpoints.maxOutputTokens%"
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "%config.ai.endpoints.headers%"
+                }
+              }
+            }
+          },
+          "nighthawk.ai.model": {
+            "type": "string",
+            "scope": "application",
+            "default": "",
+            "markdownDescription": "%config.ai.model%"
+          }
+        }
+      },
+      {
+        "title": "%config.agent.title%",
+        "properties": {
+          "nighthawk.agent.permissionMode": {
+            "type": "string",
+            "scope": "application",
+            "enum": [
+              "default",
+              "acceptEdits",
+              "plan",
+              "bypassPermissions"
+            ],
+            "enumDescriptions": [
+              "%config.agent.permissionMode.default%",
+              "%config.agent.permissionMode.acceptEdits%",
+              "%config.agent.permissionMode.plan%",
+              "%config.agent.permissionMode.bypassPermissions%"
+            ],
+            "default": "default",
+            "description": "%config.agent.permissionMode%"
+          },
+          "nighthawk.agent.permissions.allow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "scope": "application",
+            "default": [],
+            "markdownDescription": "%config.agent.permissions.allow%"
+          },
+          "nighthawk.agent.permissions.deny": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "%config.agent.permissions.deny%"
+          },
+          "nighthawk.agent.effort": {
+            "type": "string",
+            "enum": [
+              "",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "default": "high",
+            "markdownDescription": "%config.agent.effort%"
+          },
+          "nighthawk.agent.thinking": {
+            "type": "boolean",
+            "default": true,
+            "description": "%config.agent.thinking%"
+          },
+          "nighthawk.agent.autoCompact": {
+            "type": "boolean",
+            "default": true,
+            "description": "%config.agent.autoCompact%"
+          },
+          "nighthawk.agent.maxSteps": {
+            "type": "number",
+            "default": 200,
+            "minimum": 1,
+            "description": "%config.agent.maxSteps%"
+          },
+          "nighthawk.agent.shell": {
+            "type": "string",
+            "scope": "machine",
+            "default": "",
+            "markdownDescription": "%config.agent.shell%"
+          },
+          "nighthawk.agent.systemPrompt": {
+            "type": "string",
+            "default": "",
+            "editPresentation": "multilineText",
+            "markdownDescription": "%config.agent.systemPrompt%"
+          },
+          "nighthawk.agent.mcpServers": {
+            "type": "object",
+            "scope": "application",
+            "default": {},
+            "markdownDescription": "%config.agent.mcpServers%"
+          },
+          "nighthawk.agent.hooks": {
+            "type": "object",
+            "scope": "application",
+            "default": {},
+            "markdownDescription": "%config.agent.hooks%"
+          }
+        }
+      }
+    ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "nighthawk-agent",
+          "icon": "$(sparkle)",
+          "title": "%container.title%"
+        }
+      ]
+    },
+    "views": {
+      "nighthawk-agent": [
+        {
+          "type": "webview",
+          "id": "nighthawk.agent.chat",
+          "name": "%view.chat%",
+          "icon": "$(sparkle)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nighthawk.agent.open",
+        "title": "%command.open%",
+        "category": "%category.agent%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.agent.openInEditor",
+        "title": "%command.openInEditor%",
+        "category": "%category.agent%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "nighthawk.agent.newSession",
+        "title": "%command.newSession%",
+        "category": "%category.agent%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nighthawk.agent.history",
+        "title": "%command.history%",
+        "category": "%category.agent%",
+        "icon": "$(history)"
+      },
+      {
+        "command": "nighthawk.agent.addSelection",
+        "title": "%command.addSelection%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.agent.fixProblems",
+        "title": "%command.fixProblems%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.agent.setPermissionMode",
+        "title": "%command.setPermissionMode%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.agent.restartMcp",
+        "title": "%command.restartMcp%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.ai.addEndpoint",
+        "title": "%command.addEndpoint%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.selectModel",
+        "title": "%command.selectModel%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.setApiKey",
+        "title": "%command.setApiKey%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.removeEndpoint",
+        "title": "%command.removeEndpoint%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.manageEndpoints",
+        "title": "%command.manageEndpoints%",
+        "category": "%category.ai%",
+        "icon": "$(server)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "nighthawk.agent.newSession",
+          "when": "view == nighthawk.agent.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.agent.history",
+          "when": "view == nighthawk.agent.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nighthawk.agent.openInEditor",
+          "when": "view == nighthawk.agent.chat",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nighthawk.ai.manageEndpoints",
+          "when": "view == nighthawk.agent.chat",
+          "group": "1_settings@1"
+        },
+        {
+          "command": "nighthawk.agent.restartMcp",
+          "when": "view == nighthawk.agent.chat",
+          "group": "1_settings@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "nighthawk.agent.addSelection",
+          "group": "nighthawk@1"
+        },
+        {
+          "command": "nighthawk.agent.fixProblems",
+          "group": "nighthawk@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "nighthawk.agent.open",
+        "key": "ctrl+escape",
+        "mac": "cmd+escape"
+      },
+      {
+        "command": "nighthawk.agent.addSelection",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "nighthawk.agent.newSession",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
+        "when": "focusedView == nighthawk.agent.chat"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "npx gulp compile-extension:nighthawk-agent && npm run build-webview",
+    "watch": "npm run build-webview && npx gulp watch-extension:nighthawk-agent",
+    "build-webview": "node ./esbuild.webview.mts",
+    "test": "node --import ./test/setup.ts --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "24.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/berkayydurdu/vscode.git"
+  }
+}
