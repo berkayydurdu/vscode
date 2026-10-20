@@ -165,6 +165,21 @@ export interface RepositoryLinks {
 	commits: LinkedCommit[];
 }
 
+/** Time the extension saw you work on a ticket or branch, not yet on the timesheet. Mirrors src/core/timeTracking.ts. */
+export interface Suggestion {
+	id: string;
+	date: string;
+	repo: string;
+	branch: string;
+	teamId?: string;
+	number?: number;
+	key?: string;
+	tracked: number;
+	logged: number;
+	minutes: number;
+	files: string[];
+}
+
 /** Asks the extension itself for what only it has, such as the Git history of the open folders. */
 export function extensionRequest<T>(type: string, payload: Record<string, unknown>): Promise<T> {
 	const id = nextRequest++;

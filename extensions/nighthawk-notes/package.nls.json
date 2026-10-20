@@ -50,6 +50,10 @@
 	"config.dailyNotes.format": "File name of daily notes. YYYY, MM, DD, HH and mm are replaced with the date.",
 	"config.dailyNotes.template": "Name of a template in the templates folder to start daily notes from.",
 	"config.templatesFolder": "Folder in the vault that holds note templates.",
+	"config.timeTracking.enabled": "Count the minutes you are active in the editor while a branch is checked out, per ticket the branch names (for example `nc-12-fix-login`), and suggest them on your team timesheet. The counts stay on this computer until you log them.",
+	"config.timeTracking.idleMinutes": "Minutes without typing, clicking or scrolling in the editor after which time stops counting.",
+	"config.timeTracking.roundTo": "Round suggested time to this many minutes.",
+	"config.timeTracking.reminder": "A time of day, such as `17:00`, after which Nighthawk reminds you once if tracked ticket time is not on your timesheet. Leave empty for no reminder.",
 	"config.server.url": "Address of the Nighthawk Notes server used for teams and shared notes.",
 	"config.teams.syncInterval": "How often, in seconds, to fetch teammates' changes to shared notes. 0 turns automatic syncing off.",
 	"config.teams.inviteExpiryHours": "How many hours new invite links stay valid."

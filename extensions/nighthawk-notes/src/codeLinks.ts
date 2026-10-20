@@ -6,6 +6,7 @@
 import { execFile } from 'node:child_process';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import type { WorkContext } from './core/timeTracking';
 import { findTicketKeys, mentionsTicket, ticketBranchName, ticketPrefix } from './core/tickets';
 import type { Team } from './teams/client';
 import type { TeamFileSystem } from './teams/teamFileSystem';
@@ -145,6 +146,13 @@ export async function openCommit(root: string, hash: string, subject: string): P
 	await vscode.commands.executeCommand('vscode.changes', `${hash.slice(0, 7)} ${subject}`, resources);
 }
 
+/** "1h 45m", "45m" */
+export function formatDuration(minutes: number): string {
+	const hours = Math.floor(minutes / 60);
+	const rest = minutes % 60;
+	return hours && rest ? `${hours}h ${rest}m` : hours ? `${hours}h` : `${rest}m`;
+}
+
 /**
  * Shows the ticket of the checked-out branch in the status bar, for example
  * "NC-12" on `nc-12-fix-login`, and opens it in the team workspace on click.
@@ -154,6 +162,7 @@ export class TicketStatus implements vscode.Disposable {
 	private readonly item = vscode.window.createStatusBarItem('nighthawk.notes.ticket', vscode.StatusBarAlignment.Left, 50);
 	private readonly disposables: vscode.Disposable[] = [this.item];
 	private readonly watched = new Set<GitRepository>();
+	private tracked: ((context: WorkContext) => number) | undefined;
 
 	constructor(private readonly fs: TeamFileSystem) {
 		this.item.name = vscode.l10n.t('Ticket of the Current Branch');
@@ -188,22 +197,43 @@ export class TicketStatus implements vscode.Disposable {
 		return (uri && repositories.find(r => uri.fsPath.startsWith(r.rootUri.fsPath + path.sep))) || repositories[0];
 	}
 
-	private update(): void {
-		const branch = this.current()?.state.HEAD?.name;
-		const teams = this.fs.allTeams();
+	/** The checked-out branch and, when it names one, its ticket. */
+	context(): (WorkContext & { team?: Team }) | undefined {
+		const repository = this.current();
+		const branch = repository?.state.HEAD?.name;
+		if (!repository || !branch) {
+			return undefined;
+		}
 		const byPrefix = new Map<string, Team>();
-		for (const team of teams) {
+		for (const team of this.fs.allTeams()) {
 			byPrefix.set(ticketPrefix(team.name), team);
 		}
-		const ref = branch ? findTicketKeys(branch, [...byPrefix.keys()])[0] : undefined;
+		const ref = findTicketKeys(branch, [...byPrefix.keys()])[0];
 		const team = ref && byPrefix.get(ref.prefix);
-		if (!ref || !team) {
+		const repo = path.basename(repository.rootUri.fsPath);
+		return team ? { repo, branch, team, teamId: team.id, number: ref.number, key: ref.key } : { repo, branch };
+	}
+
+	/** Shows the time tracked today next to the ticket. */
+	showTracked(tracked: (context: WorkContext) => number, onDidChange: vscode.Event<void>): void {
+		this.tracked = tracked;
+		this.disposables.push(onDidChange(() => this.update()));
+		this.update();
+	}
+
+	private update(): void {
+		const context = this.context();
+		if (!context?.team || !context.key) {
 			this.item.hide();
 			return;
 		}
-		this.item.text = `$(issues) ${ref.key}`;
-		this.item.tooltip = vscode.l10n.t('Branch {0} is linked to {1} in {2}. Click to open the ticket.', branch!, ref.key, team.name);
-		this.item.command = { title: vscode.l10n.t('Open Ticket'), command: 'nighthawk.notes.teams.openTicket', arguments: [team.id, ref.number] };
+		const minutes = this.tracked?.(context) ?? 0;
+		const time = minutes >= 1 ? ` ${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}` : '';
+		this.item.text = `$(issues) ${context.key}${time}`;
+		this.item.tooltip = minutes >= 1
+			? vscode.l10n.t('Branch {0} is linked to {1} in {2}. You have worked on it for {3} today; the team workspace timesheet suggests logging it. Click to open the ticket.', context.branch, context.key, context.team.name, formatDuration(minutes))
+			: vscode.l10n.t('Branch {0} is linked to {1} in {2}. Click to open the ticket.', context.branch, context.key, context.team.name);
+		this.item.command = { title: vscode.l10n.t('Open Ticket'), command: 'nighthawk.notes.teams.openTicket', arguments: [context.team.id, context.number] };
 		this.item.show();
 	}
 

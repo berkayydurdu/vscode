@@ -91,6 +91,8 @@ const ICON_PATHS: Record<string, string> = {
 	people: '<circle cx="6" cy="5.5" r="2.25"/><path d="M1.75 13.5c.5-2.2 2.2-3.4 4.25-3.4s3.75 1.2 4.25 3.4"/><circle cx="11.5" cy="5" r="1.75"/><path d="M11 9.75c1.7 0 3 .9 3.4 2.75"/>',
 	branch: '<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5" r="1.5"/><path d="M4.5 5v6M11.5 6.5c0 2.5-2.5 3-5.5 4.5"/>',
 	commit: '<circle cx="8" cy="8" r="2.5"/><path d="M1.5 8h4M10.5 8h4"/>',
+	sparkle: '<path d="M8 1.5l1.4 4.1 4.1 1.4-4.1 1.4L8 12.5 6.6 8.4 2.5 7l4.1-1.4z"/><path d="M12.5 11l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/>',
+	edit: '<path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/>',
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

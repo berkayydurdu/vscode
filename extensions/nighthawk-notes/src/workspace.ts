@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { codeLinks, openCommit, startTicketBranch } from './codeLinks';
 import { isAllowedRequest } from './core/teamApi';
+import type { ActivityTracker } from './timeTracking';
 import type { Account } from './teams/account';
 import type { Team } from './teams/client';
 import { TeamFileSystem, teamNoteUri } from './teams/teamFileSystem';
@@ -24,6 +25,10 @@ interface PageMessage {
 	root?: string;
 	hash?: string;
 	subject?: string;
+	from?: string;
+	to?: string;
+	logged?: Record<string, number>;
+	suggestion?: string;
 }
 
 /**
@@ -35,13 +40,13 @@ export class WorkspacePanel implements vscode.Disposable {
 
 	private static readonly panels = new Map<string, WorkspacePanel>();
 
-	static show(context: vscode.ExtensionContext, account: Account, fs: TeamFileSystem, team: Team): WorkspacePanel {
+	static show(context: vscode.ExtensionContext, account: Account, fs: TeamFileSystem, tracker: ActivityTracker, team: Team): WorkspacePanel {
 		const existing = WorkspacePanel.panels.get(team.id);
 		if (existing) {
 			existing.panel.reveal();
 			return existing;
 		}
-		const panel = new WorkspacePanel(context, account, fs, team);
+		const panel = new WorkspacePanel(context, account, fs, tracker, team);
 		WorkspacePanel.panels.set(team.id, panel);
 		return panel;
 	}
@@ -55,9 +60,9 @@ export class WorkspacePanel implements vscode.Disposable {
 	private readonly panel: vscode.WebviewPanel;
 	private readonly disposables: vscode.Disposable[] = [];
 	private ready = false;
-	private pendingItem: number | undefined;
+	private pending: { type: 'openItem'; number: number } | { type: 'openView'; view: string } | undefined;
 
-	private constructor(context: vscode.ExtensionContext, private readonly account: Account, private readonly fs: TeamFileSystem, private readonly team: Team) {
+	private constructor(context: vscode.ExtensionContext, private readonly account: Account, private readonly fs: TeamFileSystem, private readonly tracker: ActivityTracker, private readonly team: Team) {
 		const media = vscode.Uri.joinPath(context.extensionUri, 'media');
 		this.panel = vscode.window.createWebviewPanel('nighthawk.notes.workspace', team.name, vscode.ViewColumn.Active, {
 			enableScripts: true,
@@ -96,10 +101,19 @@ export class WorkspacePanel implements vscode.Disposable {
 
 	/** Opens the ticket with this number, once the page has loaded. */
 	revealItem(number: number): void {
+		this.postWhenReady({ type: 'openItem', number });
+	}
+
+	/** Switches to a view such as the timesheet, once the page has loaded. */
+	revealView(view: 'timesheet'): void {
+		this.postWhenReady({ type: 'openView', view });
+	}
+
+	private postWhenReady(message: NonNullable<WorkspacePanel['pending']>): void {
 		if (this.ready) {
-			this.panel.webview.postMessage({ type: 'openItem', number });
+			this.panel.webview.postMessage(message);
 		} else {
-			this.pendingItem = number;
+			this.pending = message;
 		}
 	}
 
@@ -114,10 +128,20 @@ export class WorkspacePanel implements vscode.Disposable {
 					me: this.account.user,
 					l10n: vscode.l10n.bundle,
 				});
-				if (this.pendingItem !== undefined) {
-					this.panel.webview.postMessage({ type: 'openItem', number: this.pendingItem });
-					this.pendingItem = undefined;
+				if (this.pending) {
+					this.panel.webview.postMessage(this.pending);
+					this.pending = undefined;
 				}
+				break;
+			case 'timeSuggestions': {
+				const logged = Object.fromEntries(Object.entries(message.logged ?? {}).filter(([, minutes]) => typeof minutes === 'number'));
+				const data = this.tracker.suggestions(this.team.id, String(message.from ?? ''), String(message.to ?? ''), logged);
+				this.panel.webview.postMessage({ type: 'response', id: Number(message.id), ok: true, data });
+				break;
+			}
+			case 'dismissSuggestion':
+				this.tracker.dismiss(String(message.suggestion ?? ''));
+				this.panel.webview.postMessage({ type: 'response', id: Number(message.id), ok: true, data: null });
 				break;
 			case 'codeLinks': {
 				const data = await codeLinks(String(message.key ?? '')).catch(() => ({ repositories: [] }));

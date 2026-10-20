@@ -102,6 +102,13 @@ class Workspace {
 		this.render();
 	}
 
+	/** Switches to a view, such as the timesheet when a reminder is clicked. */
+	openView(view: string): void {
+		if (VIEWS.some(v => v.id === view)) {
+			this.go(view as ViewId);
+		}
+	}
+
 	/** Opens the item with this number, waiting for the items to load when needed. */
 	openNumber(number: number): void {
 		const item = this.model.all().find(i => i.number === number);
@@ -350,6 +357,7 @@ function roleLabel(role: string): string {
 
 let workspace: Workspace | undefined;
 let openOnStart: number | undefined;
+let viewOnStart: string | undefined;
 
 window.addEventListener('message', event => {
 	// Only the extension's messages, which the webview host relays from this page's own origin.
@@ -366,11 +374,20 @@ window.addEventListener('message', event => {
 		if (openOnStart !== undefined) {
 			workspace.openNumber(openOnStart);
 		}
+		if (viewOnStart !== undefined) {
+			workspace.openView(viewOnStart);
+		}
 	} else if (message?.type === 'openItem' && typeof message.number === 'number') {
 		if (workspace) {
 			workspace.openNumber(message.number);
 		} else {
 			openOnStart = message.number;
+		}
+	} else if (message?.type === 'openView' && typeof message.view === 'string') {
+		if (workspace) {
+			workspace.openView(message.view);
+		} else {
+			viewOnStart = message.view;
 		}
 	}
 });

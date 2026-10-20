@@ -54,6 +54,39 @@
           "default": "Templates",
           "description": "%config.templatesFolder%"
         },
+        "nighthawk.notes.timeTracking.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.timeTracking.enabled%",
+          "scope": "application"
+        },
+        "nighthawk.notes.timeTracking.idleMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "%config.timeTracking.idleMinutes%",
+          "scope": "application"
+        },
+        "nighthawk.notes.timeTracking.roundTo": {
+          "type": "number",
+          "default": 15,
+          "enum": [
+            1,
+            5,
+            10,
+            15,
+            30
+          ],
+          "description": "%config.timeTracking.roundTo%",
+          "scope": "application"
+        },
+        "nighthawk.notes.timeTracking.reminder": {
+          "type": "string",
+          "default": "17:00",
+          "pattern": "^(\\d{1,2}:\\d{2})?$",
+          "markdownDescription": "%config.timeTracking.reminder%",
+          "scope": "application"
+        },
         "nighthawk.notes.server.url": {
           "type": "string",
           "default": "http://localhost:8787",

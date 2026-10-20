@@ -17,6 +17,7 @@ import { VAULT_COLLECTION, Vault } from './vault';
 import { BacklinksProvider, TagsProvider, VaultTreeProvider } from './views/vaultViews';
 import { roleLabel, TeamsTreeProvider } from './views/teamsView';
 import { TicketStatus } from './codeLinks';
+import { ActivityTracker } from './timeTracking';
 import { WorkspacePanel } from './workspace';
 
 const encoder = new TextEncoder();
@@ -27,6 +28,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	const localServer = new LocalServer(context);
 	const account = new Account(context, localServer);
 	const teamFs = new TeamFileSystem(account, index);
+	const ticketStatus = new TicketStatus(teamFs);
+	const tracker = new ActivityTracker(context, account, () => ticketStatus.context(), teamId => {
+		const team = teamFs.getTeam(teamId);
+		if (team) {
+			WorkspacePanel.show(context, account, teamFs, tracker, team).revealView('timesheet');
+		}
+	});
 
 	const collectionLabel = (note: IndexedNote): string => note.collection === VAULT_COLLECTION
 		? vscode.l10n.t('My notes')
@@ -246,16 +254,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			))?.team;
 		}
 		if (team) {
-			WorkspacePanel.show(context, account, teamFs, team);
+			WorkspacePanel.show(context, account, teamFs, tracker, team);
 		}
 	});
 	command('nighthawk.notes.teams.openTicket', (teamId?: string, number?: number) => {
 		const team = typeof teamId === 'string' ? teamFs.getTeam(teamId) : undefined;
 		if (team && typeof number === 'number') {
-			WorkspacePanel.show(context, account, teamFs, team).revealItem(number);
+			WorkspacePanel.show(context, account, teamFs, tracker, team).revealItem(number);
 		}
 	});
-	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() }, new TicketStatus(teamFs));
+	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() }, ticketStatus, tracker);
+	ticketStatus.showTracked(work => tracker.trackedToday(work), tracker.onDidChange);
 
 	try {
 		await vault.start();
