@@ -105,3 +105,12 @@ export const PRESETS: Preset[] = [
 	{ id: 'custom-openai', label: 'Other OpenAI-compatible endpoint', provider: 'openai', baseUrl: '', models: [], needsKey: false },
 	{ id: 'custom-anthropic', label: 'Other Anthropic-compatible endpoint', provider: 'anthropic', baseUrl: '', models: [], needsKey: false },
 ];
+
+const STRONG_MODEL = /claude-(opus|sonnet)|gpt-5|gemini-[\d.]+-pro|deepseek-chat|qwen[\d.]*-coder|codestral|grok-code/;
+
+/** The model to preselect for a new endpoint: a preset default when offered, else a known strong coding model, else the first one listed. */
+export function suggestModel(preset: Preset | undefined, available: string[]): string | undefined {
+	return preset?.models.find(m => available.includes(m))
+		?? available.find(m => STRONG_MODEL.test(m.toLowerCase()))
+		?? available[0];
+}

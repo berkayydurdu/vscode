@@ -217,6 +217,12 @@
 	],
 	"onboardingThemes": [
 		{
+			"id": "nighthawk-dark",
+			"label": "Nighthawk Dark",
+			"themeId": "Nighthawk Dark",
+			"type": "dark"
+		},
+		{
 			"id": "dark-2026",
 			"label": "Dark 2026",
 			"themeId": "Dark 2026",
@@ -229,10 +235,10 @@
 			"type": "hcDark"
 		},
 		{
-			"id": "solarized-dark",
-			"label": "Solarized Dark",
-			"themeId": "Solarized Dark",
-			"type": "dark"
+			"id": "nighthawk-light",
+			"label": "Nighthawk Light",
+			"themeId": "Nighthawk Light",
+			"type": "light"
 		},
 		{
 			"id": "light-2026",
@@ -245,12 +251,6 @@
 			"label": "Light High Contrast",
 			"themeId": "Default High Contrast Light",
 			"type": "hcLight"
-		},
-		{
-			"id": "solarized-light",
-			"label": "Solarized Light",
-			"themeId": "Solarized Light",
-			"type": "light"
 		}
 	],
 	"builtInExtensionsEnabledWithAutoUpdates": [

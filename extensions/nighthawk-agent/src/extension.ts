@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
-import { Endpoints } from './host/endpoints';
+import { Endpoints, type QuickSetup } from './host/endpoints';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
 
@@ -87,7 +87,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			await mcp.restart();
 			vscode.window.showInformationMessage(vscode.l10n.t('MCP servers restarted.'));
 		}),
-		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', () => endpoints.add()),
+		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
 		vscode.commands.registerCommand('nighthawk.ai.selectModel', () => endpoints.pickModel()),
 		vscode.commands.registerCommand('nighthawk.ai.setApiKey', () => endpoints.setKey()),
 		vscode.commands.registerCommand('nighthawk.ai.removeEndpoint', () => endpoints.remove()),

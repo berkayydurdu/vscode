@@ -1,0 +1,343 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Nighthawk first-run setup. Builds on the layout in variationA.css. */
+
+.nighthawk-onboarding .onboarding-a-header {
+	padding-right: 64px;
+}
+
+.nighthawk-onboarding .onboarding-a-card {
+	background:
+		radial-gradient(120% 60% at 100% 0%, color-mix(in srgb, var(--vscode-focusBorder) 10%, transparent), transparent 60%),
+		var(--vscode-editor-background);
+}
+
+.nh-onboarding-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.nh-onboarding-brand {
+	width: 20px;
+	height: 20px;
+	background-image: url('../../../../browser/media/code-icon.svg');
+	background-repeat: no-repeat;
+	background-size: contain;
+}
+
+.nighthawk-onboarding .onboarding-a-ai-pref-card-desc {
+	overflow-wrap: anywhere;
+}
+
+/* Model step */
+
+.nh-onboarding-model {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.nh-onboarding-providers {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.nh-onboarding-provider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+	color: inherit;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+	outline: none;
+	transition: border-color 0.15s ease, background 0.12s ease, transform 0.12s ease;
+}
+
+.nh-onboarding-provider:hover {
+	border-color: var(--vscode-focusBorder);
+	transform: translateY(-1px);
+}
+
+.nh-onboarding-provider:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.nh-onboarding-provider.selected {
+	border-color: var(--vscode-focusBorder);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 10%, var(--vscode-editor-background));
+	box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.nh-onboarding-provider-mark {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	font-size: 13px;
+	font-weight: 700;
+	color: #ffffff;
+}
+
+.nh-onboarding-provider-mark.other {
+	color: var(--vscode-descriptionForeground);
+	background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+}
+
+.nh-onboarding-provider-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nh-onboarding-provider-name {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.nh-onboarding-provider-detail {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.nh-onboarding-model-form {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px;
+	border-radius: 10px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: color-mix(in srgb, var(--vscode-editorWidget-background, var(--vscode-sideBar-background)) 70%, transparent);
+}
+
+.nh-onboarding-key-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nh-onboarding-key-field {
+	flex: 1;
+	min-width: 0;
+}
+
+.nh-onboarding-key-field .monaco-inputbox {
+	border-radius: 6px;
+}
+
+.nh-onboarding-key-field .monaco-inputbox input {
+	padding: 6px 8px;
+}
+
+.nh-onboarding-connect {
+	flex: none;
+}
+
+.nh-onboarding-local-hint {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.nh-onboarding-link {
+	align-self: flex-start;
+	font-size: 12px;
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.nh-onboarding-link:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+
+.nh-onboarding-link:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.nh-onboarding-status {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	font-size: 12px;
+}
+
+.nh-onboarding-status:empty {
+	display: none;
+}
+
+.nh-onboarding-status.connecting,
+.nh-onboarding-status.error {
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+}
+
+.nh-onboarding-status.connecting {
+	color: var(--vscode-descriptionForeground);
+}
+
+.nh-onboarding-status.error {
+	color: var(--vscode-errorForeground);
+}
+
+.nh-onboarding-status-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nh-onboarding-status.connected .nh-onboarding-status-line .codicon {
+	color: var(--vscode-testing-iconPassed, #73c991);
+}
+
+.nh-onboarding-model-pick {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.nh-onboarding-select {
+	min-width: 260px;
+	max-width: 100%;
+	padding: 5px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+	background: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	font-family: inherit;
+	font-size: 12px;
+	outline: none;
+}
+
+.nh-onboarding-select:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* Notes step */
+
+.onboarding-a-ai-pref-cards.nh-two-columns {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nh-onboarding-notes .onboarding-a-ai-pref-card-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 11px;
+	background: color-mix(in srgb, var(--vscode-focusBorder) 14%, transparent);
+}
+
+.nighthawk-onboarding .nh-onboarding-notes .onboarding-a-ai-pref-card-icon .codicon {
+	font-size: 22px;
+}
+
+/* Ready step */
+
+.nh-onboarding-ready {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	align-content: center;
+	flex: 1;
+}
+
+.nh-onboarding-ready-tile {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding: 18px;
+	border-radius: 12px;
+	border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+	background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+	color: inherit;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+	outline: none;
+	transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.nh-onboarding-ready-tile:hover {
+	border-color: var(--vscode-focusBorder);
+	transform: translateY(-1px);
+}
+
+.nh-onboarding-ready-tile:focus-visible {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 1px;
+}
+
+.nh-onboarding-ready-icon {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 9px;
+	color: var(--vscode-textLink-foreground);
+	background: color-mix(in srgb, var(--vscode-focusBorder) 14%, transparent);
+}
+
+.nighthawk-onboarding .nh-onboarding-ready-icon .codicon {
+	font-size: 18px;
+}
+
+.nh-onboarding-ready-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.nh-onboarding-ready-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.nh-onboarding-ready-detail {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+.monaco-workbench.hc-black .nh-onboarding-provider,
+.monaco-workbench.hc-light .nh-onboarding-provider,
+.monaco-workbench.hc-black .nh-onboarding-ready-tile,
+.monaco-workbench.hc-light .nh-onboarding-ready-tile {
+	border-color: var(--vscode-contrastBorder);
+}
