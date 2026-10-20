@@ -48,7 +48,7 @@ interface GraphMessage {
 
 	window.addEventListener('message', (event: MessageEvent<GraphMessage>) => {
 		const message = event.data;
-		if (message.type !== 'graph') {
+		if (event.origin !== window.origin || message?.type !== 'graph') {
 			return;
 		}
 		// Keep positions of notes that were already on screen.

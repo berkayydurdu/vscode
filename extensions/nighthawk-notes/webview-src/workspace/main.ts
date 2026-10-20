@@ -330,6 +330,10 @@ function roleLabel(role: string): string {
 }
 
 window.addEventListener('message', event => {
+	// Only the extension's messages, which the webview host relays from this page's own origin.
+	if (event.origin !== window.origin) {
+		return;
+	}
 	const message = event.data;
 	if (message?.type === 'init') {
 		const init = message as InitMessage;

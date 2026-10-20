@@ -122,7 +122,7 @@ let nextRequest = 1;
 
 window.addEventListener('message', event => {
 	const message = event.data;
-	if (message?.type !== 'response') {
+	if (event.origin !== window.origin || message?.type !== 'response') {
 		return;
 	}
 	const request = pending.get(message.id);
