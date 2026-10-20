@@ -22,6 +22,8 @@ export interface AppOptions {
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_NOTE_BYTES = 1024 * 1024;
 const NOTES_EXTENSION_ID = 'vscode.nighthawk-notes';
+/** What Nighthawk syncs between a person's computers. */
+const SYNC_RESOURCES = new Set(['settings', 'keybindings', 'snippets', 'extensions']);
 
 class HttpError extends Error {
 	readonly status: number;
@@ -160,6 +162,29 @@ export function createApp(store: Store, options: AppOptions): Server {
 		}
 		store.updateUserName(user.id, name);
 		return { user: store.getUser(user.id) };
+	});
+
+	// --- settings sync: each person's own editor settings, shared between their computers
+
+	route('GET', '/api/me/sync', true, ctx => ({ resources: store.syncResources(requireUser(ctx).id) }));
+
+	route('PUT', '/api/me/sync/:resource', true, ctx => {
+		const user = requireUser(ctx);
+		if (!SYNC_RESOURCES.has(ctx.params.resource)) {
+			throw new HttpError(404, 'Unknown sync resource');
+		}
+		const baseVersion = ctx.body.baseVersion;
+		if (typeof baseVersion !== 'number' || !Number.isInteger(baseVersion) || baseVersion < 0) {
+			throw new HttpError(400, 'baseVersion is required');
+		}
+		const content = requireString(ctx.body, 'content', MAX_NOTE_BYTES);
+		const machine = optionalString(ctx.body, 'machine', 100) ?? '';
+		return { resource: store.putSyncResource(user.id, ctx.params.resource, baseVersion, content, machine) };
+	});
+
+	route('DELETE', '/api/me/sync', true, ctx => {
+		store.deleteSyncData(requireUser(ctx).id);
+		return { ok: true };
 	});
 
 	// --- teams

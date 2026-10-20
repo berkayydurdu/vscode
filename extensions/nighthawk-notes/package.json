@@ -160,6 +160,26 @@
     ],
     "commands": [
       {
+        "command": "nighthawk.notes.sync.turnOn",
+        "title": "%command.sync.turnOn%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.sync.turnOff",
+        "title": "%command.sync.turnOff%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.sync.now",
+        "title": "%command.sync.now%",
+        "category": "%category%"
+      },
+      {
+        "command": "nighthawk.notes.sync.showLog",
+        "title": "%command.sync.showLog%",
+        "category": "%category%"
+      },
+      {
         "command": "nighthawk.notes.live.showPeople",
         "title": "%command.live.showPeople%",
         "category": "%category%"
@@ -364,6 +384,18 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "nighthawk.notes.sync.turnOn",
+          "when": "!nighthawk.notes.settingsSyncOn"
+        },
+        {
+          "command": "nighthawk.notes.sync.turnOff",
+          "when": "nighthawk.notes.settingsSyncOn"
+        },
+        {
+          "command": "nighthawk.notes.sync.now",
+          "when": "nighthawk.notes.settingsSyncOn"
+        },
+        {
           "command": "nighthawk.notes.live.showPeople",
           "when": "resourceScheme == nighthawk-team"
         },
@@ -512,6 +544,21 @@
           "command": "nighthawk.notes.teams.signOut",
           "when": "view == nighthawk.notes.teams && nighthawk.notes.signedIn",
           "group": "1_account@3"
+        },
+        {
+          "command": "nighthawk.notes.sync.turnOn",
+          "when": "view == nighthawk.notes.teams && !nighthawk.notes.settingsSyncOn",
+          "group": "2_sync@1"
+        },
+        {
+          "command": "nighthawk.notes.sync.now",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.settingsSyncOn",
+          "group": "2_sync@1"
+        },
+        {
+          "command": "nighthawk.notes.sync.turnOff",
+          "when": "view == nighthawk.notes.teams && nighthawk.notes.settingsSyncOn",
+          "group": "2_sync@2"
         },
         {
           "command": "nighthawk.notes.teams.setServer",
@@ -674,5 +721,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/berkayydurdu/vscode.git"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1"
   }
 }

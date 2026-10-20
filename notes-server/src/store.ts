@@ -127,6 +127,15 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS notes_team_path ON notes(team_id, path) WHERE deleted = 0;
 CREATE INDEX IF NOT EXISTS notes_team_seq ON notes(team_id, seq);
+CREATE TABLE IF NOT EXISTS sync_data (
+	user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	resource TEXT NOT NULL,
+	content TEXT NOT NULL,
+	version INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL,
+	machine TEXT NOT NULL,
+	PRIMARY KEY (user_id, resource)
+);
 CREATE TABLE IF NOT EXISTS counters (
 	name TEXT PRIMARY KEY,
 	value INTEGER NOT NULL
@@ -134,6 +143,16 @@ CREATE TABLE IF NOT EXISTS counters (
 `;
 
 export class ConflictError extends Error { }
+
+/** One kind of editor data a person syncs between their computers, such as their settings. */
+export interface SyncResource {
+	resource: string;
+	content: string;
+	version: number;
+	updatedAt: number;
+	/** The computer that last changed it, as that computer names itself. */
+	machine: string;
+}
 
 /**
  * All persistent state of the notes server, kept in one SQLite database.
@@ -405,6 +424,36 @@ export class Store {
 				.run(this.nextSeq(), Date.now(), userId, noteId);
 			return true;
 		});
+	}
+
+	// --- settings sync
+
+	syncResources(userId: string): SyncResource[] {
+		const rows = this.db.prepare('SELECT resource, content, version, updated_at, machine FROM sync_data WHERE user_id = ? ORDER BY resource').all(userId) as Row[];
+		return rows.map(row => ({ resource: String(row.resource), content: String(row.content), version: Number(row.version), updatedAt: Number(row.updated_at), machine: String(row.machine) }));
+	}
+
+	/**
+	 * Replaces one synced resource if `baseVersion` is the stored version (0
+	 * when there is none yet), so two computers cannot overwrite each other.
+	 */
+	putSyncResource(userId: string, resource: string, baseVersion: number, content: string, machine: string): SyncResource {
+		return this.transaction(() => {
+			const current = this.syncResources(userId).find(r => r.resource === resource);
+			if ((current?.version ?? 0) !== baseVersion) {
+				throw new ConflictError(`${resource} was changed on ${current?.machine ?? 'another computer'} (version ${current?.version ?? 0})`);
+			}
+			const updatedAt = Date.now();
+			this.db.prepare(`
+				INSERT INTO sync_data (user_id, resource, content, version, updated_at, machine) VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT (user_id, resource) DO UPDATE SET content = excluded.content, version = excluded.version, updated_at = excluded.updated_at, machine = excluded.machine
+			`).run(userId, resource, content, baseVersion + 1, updatedAt, machine);
+			return { resource, content, version: baseVersion + 1, updatedAt, machine };
+		});
+	}
+
+	deleteSyncData(userId: string): void {
+		this.db.prepare('DELETE FROM sync_data WHERE user_id = ?').run(userId);
 	}
 }
 
