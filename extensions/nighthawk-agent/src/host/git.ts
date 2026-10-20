@@ -119,14 +119,7 @@ export async function generateCommitMessage(endpoints: Endpoints, usage: UsageMe
 		} catch (err) {
 			repository.inputBox.value = previous;
 			if (isBudgetError(err)) {
-				const change = vscode.l10n.t('Change Limit');
-				const allow = vscode.l10n.t('Allow This Month');
-				const pick = await vscode.window.showWarningMessage(err.message, change, allow);
-				if (pick === change) {
-					await usage.editLimit();
-				} else if (pick === allow) {
-					await usage.allowThisMonth();
-				}
+				await usage.offerToRaiseLimit(err);
 			} else if (!abort.signal.aborted) {
 				vscode.window.showErrorMessage(vscode.l10n.t('Could not write a commit message: {0}', err.message ?? String(err)));
 			}

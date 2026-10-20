@@ -8,6 +8,10 @@
   "engines": {
     "vscode": "^1.100.0"
   },
+  "enabledApiProposals": [
+    "contribSourceControlInputBoxMenu",
+    "terminalQuickFixProvider"
+  ],
   "categories": [
     "AI",
     "Other"
@@ -435,6 +439,18 @@
         "title": "%command.reviewBranch%",
         "category": "%category.agent%",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "nighthawk.terminal.askForCommand",
+        "title": "%command.terminal.askForCommand%",
+        "category": "%category.terminal%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.terminal.explainError",
+        "title": "%command.terminal.explainError%",
+        "category": "%category.terminal%",
+        "icon": "$(question)"
       }
     ],
     "menus": {
@@ -469,6 +485,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "nighthawk.terminal.askForCommand",
+          "when": "view == terminal",
+          "group": "navigation@0"
+        },
         {
           "command": "nighthawk.agent.background.start",
           "when": "view == nighthawk.agent.background",
@@ -565,6 +586,17 @@
           "group": "navigation@50"
         }
       ],
+      "terminal/context": [
+        {
+          "command": "nighthawk.terminal.askForCommand",
+          "group": "nighthawk@1"
+        },
+        {
+          "command": "nighthawk.terminal.explainError",
+          "when": "nighthawk.terminal.hasFailure",
+          "group": "nighthawk@2"
+        }
+      ],
       "editor/context": [
         {
           "command": "nighthawk.agent.addSelection",
@@ -593,8 +625,33 @@
         "key": "ctrl+alt+n",
         "mac": "cmd+alt+n",
         "when": "focusedView == nighthawk.agent.chat"
+      },
+      {
+        "command": "nighthawk.terminal.askForCommand",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "terminalFocus"
       }
-    ]
+    ],
+    "terminalQuickFixes": [
+      {
+        "id": "nighthawk.agent.explainError",
+        "commandLineMatcher": ".+",
+        "commandExitResult": "error",
+        "outputMatcher": {
+          "anchor": "bottom",
+          "length": 40,
+          "lineMatcher": ".+",
+          "offset": 0
+        },
+        "kind": "explain"
+      }
+    ],
+    "configurationDefaults": {
+      "terminal.integrated.commandsToSkipShell": [
+        "nighthawk.terminal.askForCommand"
+      ]
+    }
   },
   "scripts": {
     "compile": "npx gulp compile-extension:nighthawk-agent && npm run build-webview",

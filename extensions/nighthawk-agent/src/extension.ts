@@ -14,6 +14,7 @@ import { chooseReviewTarget, generateCommitMessage } from './host/git';
 import { branchReviewPrompt } from './core/commit';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
+import { TerminalAssistant } from './host/terminal';
 import { UsageMeter } from './host/usage';
 import { UsagePanel } from './host/usageView';
 
@@ -38,6 +39,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	const view = new AgentViewProvider(host);
 	const background = new BackgroundAgents(host);
 	host.liveSession = id => background.live(id);
+	const terminal = new TerminalAssistant(endpoints, usage, async (shown, prompt) => {
+		const controller = await view.show();
+		controller.startNew();
+		await controller.session.sendTask(shown, prompt);
+	});
 	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
@@ -52,7 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, background, diffs.disposable,
+		endpoints, mcp, view, status, usage, background, terminal, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -123,6 +129,8 @@ export function activate(context: vscode.ExtensionContext): void {
 				: vscode.l10n.t('Review this branch against {0} before it is pushed.', target.base);
 			await controller.session.sendTask(shown, branchReviewPrompt(target.base, target.branch));
 		}),
+		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
+		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
 		vscode.commands.registerCommand('nighthawk.ai.selectModel', () => endpoints.pickModel()),
 		vscode.commands.registerCommand('nighthawk.ai.setApiKey', () => endpoints.setKey()),

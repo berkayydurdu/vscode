@@ -185,6 +185,18 @@ export class UsageMeter implements vscode.Disposable {
 		return record.cost;
 	}
 
+	/** Offers to raise the limit after a request failed because the monthly limit was reached. */
+	async offerToRaiseLimit(err: Error): Promise<void> {
+		const change = vscode.l10n.t('Change Limit');
+		const allow = vscode.l10n.t('Allow This Month');
+		const pick = await vscode.window.showWarningMessage(err.message, change, allow);
+		if (pick === change) {
+			await this.editLimit();
+		} else if (pick === allow) {
+			await this.allowThisMonth();
+		}
+	}
+
 	private async warnOnLimit(before: number, after: number): Promise<void> {
 		const limit = this.limit();
 		const was = budgetState(before, limit);

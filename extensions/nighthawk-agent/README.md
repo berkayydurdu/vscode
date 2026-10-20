@@ -71,6 +71,12 @@ The agent reads these from the workspace (only in trusted workspaces) and from `
 
 Conversations are saved per workspace; open them from the history button. Hover a message and press the rewind button to go back to before it: the files the agent changed since then are restored. Long conversations are compacted automatically near the model's context limit.
 
+## Terminal assistant
+
+Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
+
+When a command fails, the lightbulb next to it offers **Explain with the Agent**, which sends the command and its output to the agent panel to find the cause and the fix. **Terminal: Explain Last Error with the Agent** does the same from the Command Palette. Both need shell integration, which is on by default for bash, zsh, fish and PowerShell.
+
 ## Development
 
 ```sh
