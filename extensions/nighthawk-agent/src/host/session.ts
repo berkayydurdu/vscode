@@ -46,6 +46,13 @@ export interface SessionData {
 	todos: Todo[];
 	/** US dollars spent on this conversation so far, as far as prices are known. */
 	cost?: number;
+	/** Folders the agent works in instead of the workspace folders, such as a background task's worktree. */
+	roots?: string[];
+}
+
+export interface SessionOptions {
+	roots?: string[];
+	mode?: PermissionMode;
 }
 
 /** What a user message changed, so it can be rewound. */
@@ -107,6 +114,12 @@ export class Session implements vscode.Disposable {
 	private items: TranscriptItem[];
 	private todos: Todo[];
 	private cost: number;
+	private readonly roots: string[] | undefined;
+	/** The error the last run stopped with, if any. */
+	lastError: string | undefined;
+	private readonly finished = new vscode.EventEmitter<void>();
+	/** Fires when the agent stops working, finished or not. */
+	readonly onDidFinish = this.finished.event;
 
 	private readonly state = new SessionState();
 	private turns: Turn[] = [];
@@ -130,12 +143,13 @@ export class Session implements vscode.Disposable {
 	private readonly emitter = new vscode.EventEmitter<HostMessage>();
 	readonly onMessage = this.emitter.event;
 
-	constructor(private readonly services: Services, data?: SessionData) {
+	constructor(private readonly services: Services, data?: SessionData, options?: SessionOptions) {
 		this.id = data?.id ?? randomUUID();
 		this.title = data?.title ?? '';
 		this.created = data?.created ?? Date.now();
 		this.updated = data?.updated ?? Date.now();
-		this.mode = data?.mode ?? vscode.workspace.getConfiguration('nighthawk.agent').get<PermissionMode>('permissionMode', 'default');
+		this.roots = data?.roots ?? options?.roots;
+		this.mode = data?.mode ?? options?.mode ?? vscode.workspace.getConfiguration('nighthawk.agent').get<PermissionMode>('permissionMode', 'default');
 		this.messages = data?.messages ?? [];
 		this.todos = data?.todos ?? [];
 		this.cost = data?.cost ?? 0;
@@ -153,7 +167,7 @@ export class Session implements vscode.Disposable {
 			}
 			return item;
 		});
-		this.workspace = new EditorWorkspace(locations().roots);
+		this.workspace = new EditorWorkspace(locations(this.roots).roots);
 		// Replaced by the detected shell before the first turn runs.
 		this.shell = shellFromPath(process.platform === 'win32' ? 'powershell.exe' : '/bin/sh');
 		this.refreshCommands();
@@ -163,6 +177,7 @@ export class Session implements vscode.Disposable {
 		this.stop();
 		this.state.dispose();
 		this.emitter.dispose();
+		this.finished.dispose();
 	}
 
 	get running(): boolean {
@@ -243,7 +258,7 @@ export class Session implements vscode.Disposable {
 
 	async refreshCommands(): Promise<void> {
 		try {
-			this.project = await loadProject();
+			this.project = await loadProject(this.roots);
 		} catch {
 			return;
 		}
@@ -300,7 +315,7 @@ export class Session implements vscode.Disposable {
 		if (attachments) {
 			content.push({ type: 'text', text: attachments });
 		}
-		this.project ??= await loadProject();
+		this.project ??= await loadProject(this.roots);
 		this.shell = await findShell(this.shellSetting());
 		const hooks = new Hooks(this.project.hooks, this.shell, this.workspace.roots[0] ?? process.cwd(), this.id);
 		if (!this.started && hooks.has('SessionStart')) {
@@ -415,7 +430,7 @@ export class Session implements vscode.Disposable {
 			case 'help':
 				return this.notice('info', this.helpText());
 		}
-		this.project ??= await loadProject();
+		this.project ??= await loadProject(this.roots);
 		const command = this.project.commands.find(c => c.name === name);
 		if (command) {
 			return void this.startTurn(text, await expandCommand(command, args));
@@ -559,16 +574,19 @@ export class Session implements vscode.Disposable {
 		const model = await this.model();
 		if (!model) {
 			this.notice('warning', vscode.l10n.t('Connect a model to start: an Anthropic or OpenAI key, OpenRouter, a local Ollama or LM Studio, or any OpenAI-compatible endpoint.'), [{ label: vscode.l10n.t('Add Model Endpoint'), action: 'addEndpoint' }]);
+			this.lastError = vscode.l10n.t('No model is connected.');
+			this.finished.fire();
 			return;
 		}
+		this.lastError = undefined;
 		this.abort = new AbortController();
 		const signal = this.abort.signal;
 		this.postState();
 		try {
 			await this.services.mcp.ensureStarted();
-			const project = this.project = await loadProject();
+			const project = this.project = await loadProject(this.roots);
 			this.shell = await findShell(this.shellSetting());
-			this.workspace.roots.splice(0, this.workspace.roots.length, ...locations().roots);
+			this.workspace.roots.splice(0, this.workspace.roots.length, ...locations(this.roots).roots);
 			const tools = this.tools(project, this.services.mcp.tools());
 			const hooks = new Hooks(project.hooks, this.shell, this.workspace.roots[0] ?? process.cwd(), this.id);
 			const promptContext = {
@@ -623,6 +641,7 @@ export class Session implements vscode.Disposable {
 		} catch (err) {
 			if (!signal.aborted) {
 				const message = String(err?.message ?? err);
+				this.lastError = message;
 				const actions = isBudgetError(err)
 					? [{ label: vscode.l10n.t('Change Limit'), action: 'editLimit' }, { label: vscode.l10n.t('Allow This Month'), action: 'allowOverLimit' }, { label: vscode.l10n.t('Show Usage'), action: 'showUsage' }]
 					: [{ label: vscode.l10n.t('Retry'), action: 'retry' }];
@@ -645,6 +664,8 @@ export class Session implements vscode.Disposable {
 			if (leftover.length && !signal.aborted) {
 				this.messages.push({ role: 'user', content: [{ type: 'text', text: leftover.join('\n\n') }] });
 				await this.run();
+			} else {
+				this.finished.fire();
 			}
 		}
 	}
@@ -966,7 +987,7 @@ export class Session implements vscode.Disposable {
 	// --- persistence
 
 	toData(): SessionData {
-		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost };
+		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots };
 	}
 
 	private async save(): Promise<void> {

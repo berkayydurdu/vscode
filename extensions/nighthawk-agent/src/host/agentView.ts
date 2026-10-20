@@ -32,6 +32,8 @@ export class DiffContentProvider implements vscode.TextDocumentContentProvider {
 
 export interface ControllerHost extends Omit<Services, 'reveal' | 'isVisible'> {
 	diffs: DiffContentProvider;
+	/** A conversation that is running elsewhere, such as a background task, to show instead of loading a copy. */
+	liveSession?(id: string): Session | undefined;
 }
 
 /** Connects one agent page (the side bar view or an editor tab) to a conversation. */
@@ -40,6 +42,10 @@ export class AgentController implements vscode.Disposable {
 	private listener: vscode.Disposable | undefined;
 	private readonly disposables: vscode.Disposable[] = [];
 	private ready = false;
+	/** Conversations shown here that something else owns, such as background tasks. */
+	private readonly borrowed = new WeakSet<Session>();
+	private readonly disposed = new vscode.EventEmitter<void>();
+	readonly onDidDispose = this.disposed.event;
 
 	constructor(
 		private readonly host: ControllerHost,
@@ -66,8 +72,37 @@ export class AgentController implements vscode.Disposable {
 
 	dispose(): void {
 		this.listener?.dispose();
-		this.session.dispose();
+		if (!this.borrowed.has(this.session)) {
+			this.session.dispose();
+		}
 		this.disposables.forEach(d => d.dispose());
+		this.disposed.fire();
+		this.disposed.dispose();
+	}
+
+	get visible(): boolean {
+		return this.isVisible();
+	}
+
+	/** Brings the page to the front. */
+	revealPage(): void {
+		this.reveal();
+	}
+
+	/** Shows a conversation that something else owns, such as a background task, without taking it over. */
+	show(session: Session): void {
+		const old = this.session;
+		this.borrowed.add(session);
+		this.attach(session);
+		this.release(old);
+	}
+
+	/** Disposes a conversation that is no longer shown, unless it is still working or owned elsewhere. */
+	private release(session: Session): void {
+		// A running conversation keeps going in the background until it finishes.
+		if (!session.running && !this.borrowed.has(session)) {
+			session.dispose();
+		}
 	}
 
 	private services(): Services {
@@ -108,14 +143,16 @@ export class AgentController implements vscode.Disposable {
 		}
 		const old = this.session;
 		this.newSession();
-		// A running conversation keeps going in the background until it finishes.
-		if (!old.running) {
-			old.dispose();
-		}
+		this.release(old);
 	}
 
 	async open(id: string): Promise<void> {
 		if (id === this.session.id) {
+			return;
+		}
+		const live = this.host.liveSession?.(id);
+		if (live) {
+			this.show(live);
 			return;
 		}
 		const data = await this.host.store.load(id);
@@ -125,9 +162,7 @@ export class AgentController implements vscode.Disposable {
 		}
 		const old = this.session;
 		this.newSession(data);
-		if (!old.running) {
-			old.dispose();
-		}
+		this.release(old);
 	}
 
 	prefill(text: string, append = true): void {

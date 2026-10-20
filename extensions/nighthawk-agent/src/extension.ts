@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
+import { BackgroundAgents } from './host/background';
+import type { BackgroundTask } from './core/background';
 import { Endpoints, type QuickSetup } from './host/endpoints';
 import { chooseReviewTarget, generateCommitMessage } from './host/git';
 import { branchReviewPrompt } from './core/commit';
@@ -34,6 +36,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		diffs: diffs.provider,
 	};
 	const view = new AgentViewProvider(host);
+	const background = new BackgroundAgents(host);
+	host.liveSession = id => background.live(id);
+	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
 	status.name = vscode.l10n.t('Agent Model');
@@ -47,7 +52,16 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, diffs.disposable,
+		endpoints, mcp, view, status, usage, background, diffs.disposable,
+		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
+		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
+		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.resume', task(t => background.resume(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.review', task(t => background.review(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.merge', task(t => background.merge(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.openFolder', task(t => background.openFolder(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.stop', task(t => background.stop(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.discard', task(t => background.remove(t))),
 		endpoints.onDidChange(updateStatus),
 		endpoints.onDidChange(() => usage.refresh()),
 		vscode.window.registerWebviewViewProvider(AgentViewProvider.viewId, view, { webviewOptions: { retainContextWhenHidden: true } }),
