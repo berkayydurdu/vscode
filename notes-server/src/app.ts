@@ -6,6 +6,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AttemptLimiter, hashPassword, hashToken, newInviteCode, newToken, verifyPassword } from './auth.ts';
 import { LiveError, LiveNotes, type Selection } from './live.ts';
+import { isEmail, type Mailer } from './mail.ts';
 import { ConflictError, isInviteUsable, isRole, roleAtLeast, type Role, type Store, type User } from './store.ts';
 import { isTextOperation } from './textOperation.ts';
 import { isValidStatus, ITEM_KINDS, PRIORITIES, VERDICTS, type ChecklistEntry, type ItemChange, type ItemKind, type Priority, type Verdict } from './work.ts';
@@ -17,6 +18,8 @@ export interface AppOptions {
 	/** Protocol the desktop app registers, used to open invite links in it. */
 	appUrlProtocol: string;
 	sessionTtlMs: number;
+	/** Sends invite emails; without one, invites are shared as links. */
+	mailer?: Mailer;
 }
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -57,6 +60,8 @@ export function createApp(store: Store, options: AppOptions): Server {
 	const routes: Route[] = [];
 	const loginLimiter = new AttemptLimiter(10, 15 * 60 * 1000);
 	const live = new LiveNotes(store);
+	/** Emails a person may send per hour, so the server cannot be used to spam. */
+	const emailLimiter = new AttemptLimiter(50, 60 * 60 * 1000);
 
 	function route(method: string, path: string, auth: boolean, handler: Handler): void {
 		const keys: string[] = [];
@@ -102,6 +107,7 @@ export function createApp(store: Store, options: AppOptions): Server {
 		name: 'Nighthawk Notes',
 		version: 1,
 		allowRegistration: options.allowRegistration,
+		email: !!options.mailer,
 	}));
 
 	// --- accounts
@@ -290,6 +296,51 @@ export function createApp(store: Store, options: AppOptions): Server {
 		return { invite: { ...invite, url: inviteUrl(invite.code) } };
 	});
 
+	route('POST', '/api/teams/:teamId/invites/email', true, async ctx => {
+		const myRole = requireRole(ctx, 'admin');
+		const user = requireUser(ctx);
+		if (!options.mailer) {
+			throw new HttpError(501, 'This notes server is not set up to send email');
+		}
+		const role = ctx.body.role ?? 'editor';
+		if (!isRole(role)) {
+			throw new HttpError(400, 'Role must be owner, admin, editor or viewer');
+		}
+		if (role === 'owner' && myRole !== 'owner') {
+			throw new HttpError(403, 'Only an owner can invite owners');
+		}
+		const emails = [...new Set(stringArray(ctx.body.emails, 'emails', 20, 320).map(email => email.trim()).filter(Boolean))];
+		const invalid = emails.filter(email => !isEmail(email));
+		if (!emails.length || invalid.length) {
+			throw new HttpError(400, invalid.length ? `Not an email address: ${invalid.join(', ')}` : 'Enter at least one email address');
+		}
+		const key = `email|${user.id}`;
+		for (let i = 0; i < emails.length; i++) {
+			if (emailLimiter.isBlocked(key)) {
+				throw new HttpError(429, 'Too many invite emails in the last hour, try again later');
+			}
+			emailLimiter.fail(key);
+		}
+		const note = optionalString(ctx.body, 'message', 1000)?.trim();
+		const expiresInHours = optionalPositiveNumber(ctx.body, 'expiresInHours') ?? 24 * 7;
+		const team = store.getTeam(ctx.params.teamId)!;
+		const sent = [];
+		const failed = [];
+		for (const email of emails) {
+			const invite = store.createInvite(newInviteCode(), team.id, role, user.id, Date.now() + expiresInHours * 3600_000, 1, email);
+			try {
+				await options.mailer.send(inviteEmail(user.name, team.name, role, email, inviteUrl(invite.code), invite.code, expiresInHours, note));
+				sent.push({ ...invite, url: inviteUrl(invite.code) });
+			} catch (err) {
+				store.revokeInvite(invite.code);
+				console.error(`Could not email an invite to ${email}:`, err);
+				failed.push({ email, error: err instanceof Error ? err.message : String(err) });
+			}
+		}
+		ctx.res.statusCode = sent.length ? 201 : 502;
+		return { sent, failed };
+	});
+
 	route('DELETE', '/api/teams/:teamId/invites/:code', true, ctx => {
 		requireRole(ctx, 'admin');
 		const invite = store.getInvite(normalizeCode(ctx.params.code));
@@ -313,6 +364,9 @@ export function createApp(store: Store, options: AppOptions): Server {
 		const result = store.acceptInvite(normalizeCode(ctx.params.code), requireUser(ctx).id);
 		if (!result) {
 			throw new HttpError(404, 'This invite is invalid or has expired');
+		}
+		if (result.sentTo !== undefined) {
+			throw new HttpError(403, `This invite was sent to ${result.sentTo}. Sign in with that email address to accept it.`);
 		}
 		return { team: store.getTeam(result.teamId), role: result.role, alreadyMember: result.alreadyMember };
 	});
@@ -746,6 +800,26 @@ class RawBody {
 	constructor(body: string) {
 		this.body = body;
 	}
+}
+
+/** The email a person gets when invited to a team. */
+function inviteEmail(from: string, team: string, role: Role, to: string, url: string, code: string, expiresInHours: number, note: string | undefined) {
+	const days = Math.round(expiresInHours / 24);
+	return {
+		to,
+		subject: `${from} invited you to ${team} on Nighthawk Notes`,
+		text: [
+			`${from} invited you to join the team "${team}" on Nighthawk Notes as ${role === 'admin' || role === 'owner' ? 'an' : 'a'} ${role}.`,
+			...(note ? ['', note] : []),
+			'',
+			`Accept the invite: ${url}`,
+			'',
+			`Or, in Nighthawk, run "Notes: Join Team with Invite..." and enter the code ${code}.`,
+			`Sign in or create your account with ${to}; the invite works for that address only${days >= 1 ? ` and expires in ${days} ${days === 1 ? 'day' : 'days'}` : ''}.`,
+			'',
+			'If you were not expecting this, you can ignore this email.',
+		].join('\n'),
+	};
 }
 
 function sendJson(res: ServerResponse, status: number, value: unknown): void {

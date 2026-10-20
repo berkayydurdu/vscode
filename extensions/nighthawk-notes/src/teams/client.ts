@@ -41,6 +41,8 @@ export interface Invite {
 	maxUses: number | null;
 	uses: number;
 	url: string;
+	/** Set for an invite sent by email: only that address can accept it. */
+	email: string | null;
 }
 
 export interface NoteMeta {
@@ -114,7 +116,7 @@ export class NotesClient {
 	}
 
 	info() {
-		return this.request<{ name: string; version: number; allowRegistration: boolean }>('GET', '/api/info');
+		return this.request<{ name: string; version: number; allowRegistration: boolean; email?: boolean }>('GET', '/api/info');
 	}
 
 	register(email: string, name: string, password: string) {
@@ -171,6 +173,11 @@ export class NotesClient {
 
 	async createInvite(teamId: string, role: Role, expiresInHours: number, maxUses?: number): Promise<Invite> {
 		return (await this.request<{ invite: Invite }>('POST', `/api/teams/${enc(teamId)}/invites`, { role, expiresInHours, maxUses })).invite;
+	}
+
+	/** Emails an invite to each address; the server must have email set up. */
+	emailInvites(teamId: string, emails: string[], role: Role, expiresInHours: number, message?: string) {
+		return this.request<{ sent: Invite[]; failed: { email: string; error: string }[] }>('POST', `/api/teams/${enc(teamId)}/invites/email`, { emails, role, expiresInHours, message });
 	}
 
 	revokeInvite(teamId: string, code: string) {

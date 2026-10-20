@@ -57,6 +57,8 @@ export interface Invite {
 	maxUses: number | null;
 	uses: number;
 	revoked: boolean;
+	/** Set for an invite sent by email: only that address can accept it. */
+	email: string | null;
 }
 
 export interface NoteMeta {
@@ -167,11 +169,20 @@ export class Store {
 		this.db = new DatabaseSync(file);
 		this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
 		this.db.exec(SCHEMA);
+		this.migrate();
 		this.work = new WorkStore(this.db, () => this.nextSeq());
 	}
 
 	close(): void {
 		this.db.close();
+	}
+
+	/** Adds what newer versions need to a database made by an older one. */
+	private migrate(): void {
+		const columns = (this.db.prepare('PRAGMA table_info(invites)').all() as Row[]).map(row => row.name);
+		if (!columns.includes('email')) {
+			this.db.exec('ALTER TABLE invites ADD COLUMN email TEXT');
+		}
 	}
 
 	private transaction<T>(fn: () => T): T {
@@ -298,10 +309,10 @@ export class Store {
 
 	// --- invites
 
-	createInvite(code: string, teamId: string, role: Role, createdBy: string, expiresAt: number | null, maxUses: number | null): Invite {
-		const invite: Invite = { code, teamId, role, createdBy, createdAt: Date.now(), expiresAt, maxUses, uses: 0, revoked: false };
-		this.db.prepare('INSERT INTO invites (code, team_id, role, created_by, created_at, expires_at, max_uses) VALUES (?, ?, ?, ?, ?, ?, ?)')
-			.run(code, teamId, role, createdBy, invite.createdAt, expiresAt, maxUses);
+	createInvite(code: string, teamId: string, role: Role, createdBy: string, expiresAt: number | null, maxUses: number | null, email: string | null = null): Invite {
+		const invite: Invite = { code, teamId, role, createdBy, createdAt: Date.now(), expiresAt, maxUses, uses: 0, revoked: false, email };
+		this.db.prepare('INSERT INTO invites (code, team_id, role, created_by, created_at, expires_at, max_uses, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+			.run(code, teamId, role, createdBy, invite.createdAt, expiresAt, maxUses, email);
 		return invite;
 	}
 
@@ -321,13 +332,17 @@ export class Store {
 
 	/**
 	 * Adds the user to the invite's team. Returns false when the invite can
-	 * no longer be used (revoked, expired or used up).
+	 * no longer be used (revoked, expired or used up), and the address it was
+	 * sent to when the user has another one.
 	 */
-	acceptInvite(code: string, userId: string): { teamId: string; role: Role; alreadyMember: boolean } | false {
+	acceptInvite(code: string, userId: string): { teamId: string; role: Role; alreadyMember: boolean; sentTo?: undefined } | false | { sentTo: string } {
 		return this.transaction(() => {
 			const invite = this.getInvite(code);
 			if (!invite || !isInviteUsable(invite)) {
 				return false;
+			}
+			if (invite.email && invite.email.toLowerCase() !== this.getUser(userId)?.email.toLowerCase()) {
+				return { sentTo: invite.email };
 			}
 			const existing = this.roleOf(invite.teamId, userId);
 			if (existing) {
@@ -482,6 +497,7 @@ function toInvite(row: Row): Invite {
 		maxUses: row.max_uses === null ? null : Number(row.max_uses),
 		uses: Number(row.uses),
 		revoked: Number(row.revoked) !== 0,
+		email: row.email === null || row.email === undefined ? null : String(row.email),
 	};
 }
 

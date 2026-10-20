@@ -31,6 +31,8 @@ Put it behind HTTPS (for example Caddy or nginx) before people sign in over the 
 | `ALLOW_REGISTRATION` | `true` | Set to `false` to stop new sign-ups once your team has accounts |
 | `SESSION_TTL_DAYS` | `30` | How long a sign-in lasts |
 | `APP_URL_PROTOCOL` | `nighthawk` | Protocol the invite page uses to open the desktop app |
+| `SMTP_URL` | (none) | Mail server for invite emails, such as `smtp://user:password@smtp.example.com:587` (STARTTLS) or `smtps://user:password@smtp.example.com` (TLS). Without it, Nighthawk opens the inviter's mail app with an invite link instead |
+| `MAIL_FROM` | `Nighthawk Notes <notes@PUBLIC_URL host>` | Sender of invite emails |
 
 ## Teams and roles
 
@@ -83,6 +85,7 @@ All endpoints take and return JSON. Send `Authorization: Bearer TOKEN` with the 
 | `GET`, `DELETE /api/me/sync` | Your synced settings, shortcuts, snippets and extensions; delete them all |
 | `PUT /api/me/sync/:resource` | Replace one (`settings`, `keybindings`, `snippets`, `extensions`): `{baseVersion, content, machine}` |
 | `GET /api/teams/:id/notes/:noteId/live?client=ID` | Live stream (server-sent events): `init`, `op`, `presence`, `join`, `leave`, `saved`, `deleted` |
+| `POST /api/teams/:id/invites/email` | Email invites `{emails, role, expiresInHours?, message?}` (admin); each works once, for its address only |
 | `POST /api/teams/:id/notes/:noteId/live/edits` | Live edit `{client, revision, op}` (editor) |
 | `POST /api/teams/:id/notes/:noteId/live/selections` | Cursor positions `{client, revision, selections: [[anchor, head]]}` |
 | `GET`, `POST /api/teams/:id/items` | List (`?since=`); create `{kind, title, body?, status?, priority?, assignees?, reviewers?, labels?, dueDate?, estimateMinutes?, checklist?}` |

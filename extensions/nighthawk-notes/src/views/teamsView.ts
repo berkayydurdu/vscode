@@ -166,15 +166,17 @@ export class TeamsTreeProvider implements vscode.TreeDataProvider<TeamNode>, vsc
 			}
 			case 'invite': {
 				const { invite } = element;
-				const item = new vscode.TreeItem(invite.code, vscode.TreeItemCollapsibleState.None);
-				const uses = invite.maxUses === null
-					? vscode.l10n.t('{0} used', invite.uses)
-					: vscode.l10n.t('{0} of {1} used', invite.uses, invite.maxUses);
+				const item = new vscode.TreeItem(invite.email ?? invite.code, vscode.TreeItemCollapsibleState.None);
+				const uses = invite.email
+					? vscode.l10n.t('emailed, not accepted yet')
+					: invite.maxUses === null
+						? vscode.l10n.t('{0} used', invite.uses)
+						: vscode.l10n.t('{0} of {1} used', invite.uses, invite.maxUses);
 				item.description = `${roleLabel(invite.role)} · ${uses}`;
 				item.tooltip = invite.expiresAt
 					? vscode.l10n.t('{0}\nExpires {1}', invite.url, new Date(invite.expiresAt).toLocaleString())
 					: invite.url;
-				item.iconPath = new vscode.ThemeIcon('link');
+				item.iconPath = new vscode.ThemeIcon(invite.email ? 'mail' : 'link');
 				item.contextValue = 'teamInvite';
 				item.command = { command: 'nighthawk.notes.teams.copyInvite', title: vscode.l10n.t('Copy Invite Link'), arguments: [element] };
 				return item;
