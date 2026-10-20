@@ -101,14 +101,16 @@ export class Endpoints implements vscode.Disposable {
 		if (stored) {
 			return stored;
 		}
-		// Fall back to the usual environment variables.
-		if (endpoint.provider === 'anthropic' && /api\.anthropic\.com/.test(endpoint.baseUrl)) {
+		// Fall back to the usual environment variables, but only for the
+		// provider's own host, so a key never goes to a look-alike URL.
+		const host = httpsHost(endpoint.baseUrl);
+		if (endpoint.provider === 'anthropic' && host === 'api.anthropic.com') {
 			return process.env.ANTHROPIC_API_KEY;
 		}
-		if (/api\.openai\.com/.test(endpoint.baseUrl)) {
+		if (host === 'api.openai.com') {
 			return process.env.OPENAI_API_KEY;
 		}
-		if (/openrouter\.ai/.test(endpoint.baseUrl)) {
+		if (host === 'openrouter.ai') {
 			return process.env.OPENROUTER_API_KEY;
 		}
 		return undefined;
@@ -358,5 +360,14 @@ export class Endpoints implements vscode.Disposable {
 		}
 		await this.context.secrets.delete(KEY_PREFIX + target.name);
 		await this.save(this.list().filter(e => e.name !== target.name));
+	}
+}
+
+function httpsHost(url: string): string | undefined {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === 'https:' ? parsed.hostname.toLowerCase() : undefined;
+	} catch {
+		return undefined;
 	}
 }

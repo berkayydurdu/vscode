@@ -88,7 +88,12 @@ class App {
 				post({ type: 'stop' });
 			}
 		});
-		window.addEventListener('message', e => this.onMessage(e.data as HostMessage));
+		window.addEventListener('message', e => {
+			// The extension's messages are relayed by the webview host, which shares this page's origin.
+			if (e.origin === window.origin) {
+				this.onMessage(e.data as HostMessage);
+			}
+		});
 		this.render();
 		post({ type: 'ready' });
 	}
@@ -185,7 +190,7 @@ class App {
 
 	private append(id: string, field: 'text' | 'output', text: string): void {
 		const item = this.items.find(i => i.id === id) as Record<string, unknown> | undefined;
-		if (!item) {
+		if (!item || (field !== 'text' && field !== 'output')) {
 			return;
 		}
 		item[field] = String(item[field] ?? '') + text;
@@ -562,7 +567,7 @@ class App {
 	private renderPlan(item: Extract<TranscriptItem, { kind: 'plan' }>): HTMLElement {
 		const body = h('div', { class: 'markdown plan-body' });
 		renderMarkdown(item.text, body);
-		return h('div', { class: { card: true, plan: true, [item.status]: true } },
+		return h('div', { class: `card plan ${item.status}` },
 			h('div', { class: 'card-title' }, icon('plan', 15), item.status === 'awaiting' ? t('Ready to start with this plan?') : item.status === 'approved' ? t('Plan approved') : t('Plan not approved')),
 			body,
 			item.status === 'awaiting' && h('div', { class: 'approval-actions' },
