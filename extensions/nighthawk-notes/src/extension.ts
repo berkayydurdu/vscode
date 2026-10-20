@@ -16,6 +16,7 @@ import { TEAM_SCHEME, TeamFileSystem, teamCollection, teamNoteUri } from './team
 import { VAULT_COLLECTION, Vault } from './vault';
 import { BacklinksProvider, TagsProvider, VaultTreeProvider } from './views/vaultViews';
 import { roleLabel, TeamsTreeProvider } from './views/teamsView';
+import { TicketStatus } from './codeLinks';
 import { WorkspacePanel } from './workspace';
 
 const encoder = new TextEncoder();
@@ -248,7 +249,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			WorkspacePanel.show(context, account, teamFs, team);
 		}
 	});
-	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() });
+	command('nighthawk.notes.teams.openTicket', (teamId?: string, number?: number) => {
+		const team = typeof teamId === 'string' ? teamFs.getTeam(teamId) : undefined;
+		if (team && typeof number === 'number') {
+			WorkspacePanel.show(context, account, teamFs, team).revealItem(number);
+		}
+	});
+	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() }, new TicketStatus(teamFs));
 
 	try {
 		await vault.start();

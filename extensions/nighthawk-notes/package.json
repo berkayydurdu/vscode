@@ -20,7 +20,8 @@
   "activationEvents": [
     "onLanguage:markdown",
     "onFileSystem:nighthawk-team",
-    "onUri"
+    "onUri",
+    "workspaceContains:.git"
   ],
   "main": "./out/extension",
   "contributes": {

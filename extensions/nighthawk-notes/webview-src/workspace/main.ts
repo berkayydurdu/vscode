@@ -47,6 +47,7 @@ class Workspace {
 	private readonly timesheet: Timesheet;
 	private readonly search = h('input', { class: 'search-input', type: 'search', placeholder: t('Search or jump to NC-12...'), spellcheck: false });
 	private lastSync = 0;
+	private pendingNumber: number | undefined;
 	private offline = false;
 	private renderPending = false;
 
@@ -82,7 +83,13 @@ class Workspace {
 				model.changed();
 			}
 		});
-		model.onChange(() => this.render());
+		model.onChange(() => {
+			if (this.pendingNumber !== undefined && model.all().some(i => i.number === this.pendingNumber)) {
+				this.openNumber(this.pendingNumber);
+				return;
+			}
+			this.render();
+		});
 		document.addEventListener('keydown', e => this.onKey(e));
 		document.addEventListener('focusout', () => setTimeout(() => this.renderPending && this.render()));
 		document.addEventListener('click', e => {
@@ -93,6 +100,18 @@ class Workspace {
 			}
 		});
 		this.render();
+	}
+
+	/** Opens the item with this number, waiting for the items to load when needed. */
+	openNumber(number: number): void {
+		const item = this.model.all().find(i => i.number === number);
+		if (item) {
+			this.pendingNumber = undefined;
+			this.model.selected = item.id;
+			this.model.changed();
+		} else {
+			this.pendingNumber = number;
+		}
 	}
 
 	start(): void {
@@ -329,6 +348,9 @@ function roleLabel(role: string): string {
 	}
 }
 
+let workspace: Workspace | undefined;
+let openOnStart: number | undefined;
+
 window.addEventListener('message', event => {
 	// Only the extension's messages, which the webview host relays from this page's own origin.
 	if (event.origin !== window.origin) {
@@ -339,7 +361,17 @@ window.addEventListener('message', event => {
 		const init = message as InitMessage;
 		setBundle(init.l10n);
 		const model = new Model(init.teamId, init.me, init.teamName);
-		new Workspace(model).start();
+		workspace = new Workspace(model);
+		workspace.start();
+		if (openOnStart !== undefined) {
+			workspace.openNumber(openOnStart);
+		}
+	} else if (message?.type === 'openItem' && typeof message.number === 'number') {
+		if (workspace) {
+			workspace.openNumber(message.number);
+		} else {
+			openOnStart = message.number;
+		}
 	}
 });
 

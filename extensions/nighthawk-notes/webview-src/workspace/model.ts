@@ -5,6 +5,7 @@
 
 import { Api, ApiError, ROLE_RANK, vscode, type Item, type ItemChange, type ItemKind, type Member, type NoteMeta, type Priority, type Team, type User } from './api';
 import { t } from './l10n';
+import { ticketPrefix } from './util';
 
 export type ViewId = 'home' | 'board' | 'tickets' | 'timesheet' | 'rfcs';
 
@@ -114,9 +115,7 @@ export class Model {
 
 	/** Short ticket prefix from the team name: "Nighthawk Core" is NC. */
 	get prefix(): string {
-		const words = this.team.name.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
-		const prefix = words.length > 1 ? words.map(w => w[0]).join('').slice(0, 4) : (words[0] ?? 'T').slice(0, 3);
-		return prefix.toUpperCase();
+		return ticketPrefix(this.team.name);
 	}
 
 	key(item: Item): string {

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { codeLinks, openCommit, startTicketBranch } from './codeLinks';
 import { isAllowedRequest } from './core/teamApi';
 import type { Account } from './teams/account';
 import type { Team } from './teams/client';
@@ -18,6 +19,11 @@ interface PageMessage {
 	body?: unknown;
 	name?: string;
 	command?: string;
+	key?: string;
+	title?: string;
+	root?: string;
+	hash?: string;
+	subject?: string;
 }
 
 /**
@@ -29,13 +35,15 @@ export class WorkspacePanel implements vscode.Disposable {
 
 	private static readonly panels = new Map<string, WorkspacePanel>();
 
-	static show(context: vscode.ExtensionContext, account: Account, fs: TeamFileSystem, team: Team): void {
+	static show(context: vscode.ExtensionContext, account: Account, fs: TeamFileSystem, team: Team): WorkspacePanel {
 		const existing = WorkspacePanel.panels.get(team.id);
 		if (existing) {
 			existing.panel.reveal();
-			return;
+			return existing;
 		}
-		WorkspacePanel.panels.set(team.id, new WorkspacePanel(context, account, fs, team));
+		const panel = new WorkspacePanel(context, account, fs, team);
+		WorkspacePanel.panels.set(team.id, panel);
+		return panel;
 	}
 
 	static closeAll(): void {
@@ -46,6 +54,8 @@ export class WorkspacePanel implements vscode.Disposable {
 
 	private readonly panel: vscode.WebviewPanel;
 	private readonly disposables: vscode.Disposable[] = [];
+	private ready = false;
+	private pendingItem: number | undefined;
 
 	private constructor(context: vscode.ExtensionContext, private readonly account: Account, private readonly fs: TeamFileSystem, private readonly team: Team) {
 		const media = vscode.Uri.joinPath(context.extensionUri, 'media');
@@ -84,9 +94,19 @@ export class WorkspacePanel implements vscode.Disposable {
 		this.panel.dispose();
 	}
 
+	/** Opens the ticket with this number, once the page has loaded. */
+	revealItem(number: number): void {
+		if (this.ready) {
+			this.panel.webview.postMessage({ type: 'openItem', number });
+		} else {
+			this.pendingItem = number;
+		}
+	}
+
 	private async onMessage(message: PageMessage | undefined): Promise<void> {
 		switch (message?.type) {
 			case 'ready':
+				this.ready = true;
 				this.panel.webview.postMessage({
 					type: 'init',
 					teamId: this.team.id,
@@ -94,6 +114,21 @@ export class WorkspacePanel implements vscode.Disposable {
 					me: this.account.user,
 					l10n: vscode.l10n.bundle,
 				});
+				if (this.pendingItem !== undefined) {
+					this.panel.webview.postMessage({ type: 'openItem', number: this.pendingItem });
+					this.pendingItem = undefined;
+				}
+				break;
+			case 'codeLinks': {
+				const data = await codeLinks(String(message.key ?? '')).catch(() => ({ repositories: [] }));
+				this.panel.webview.postMessage({ type: 'response', id: Number(message.id), ok: true, data });
+				break;
+			}
+			case 'startBranch':
+				await startTicketBranch(String(message.key ?? ''), String(message.title ?? ''));
+				break;
+			case 'openCommit':
+				await openCommit(String(message.root ?? ''), String(message.hash ?? ''), String(message.subject ?? ''));
 				break;
 			case 'request':
 				await this.request(Number(message.id), String(message.method), String(message.path), message.body);
