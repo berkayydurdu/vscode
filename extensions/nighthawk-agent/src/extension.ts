@@ -12,6 +12,8 @@ import { chooseReviewTarget, generateCommitMessage } from './host/git';
 import { branchReviewPrompt } from './core/commit';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
+import { UsageMeter } from './host/usage';
+import { UsagePanel } from './host/usageView';
 
 function workspaceKey(): string {
 	const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.toString()).sort().join('|');
@@ -22,10 +24,12 @@ export function activate(context: vscode.ExtensionContext): void {
 	const endpoints = new Endpoints(context);
 	const mcp = new McpManager(context);
 	const diffs = DiffContentProvider.register();
+	const usage = new UsageMeter(context, () => !!endpoints.current());
 	const host: ControllerHost = {
 		context,
 		endpoints,
 		mcp,
+		usage,
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
 	};
@@ -43,8 +47,9 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, diffs.disposable,
+		endpoints, mcp, view, status, usage, diffs.disposable,
 		endpoints.onDidChange(updateStatus),
+		endpoints.onDidChange(() => usage.refresh()),
 		vscode.window.registerWebviewViewProvider(AgentViewProvider.viewId, view, { webviewOptions: { retainContextWhenHidden: true } }),
 		vscode.commands.registerCommand('nighthawk.agent.open', async () => (await view.show()).focusInput()),
 		vscode.commands.registerCommand('nighthawk.agent.openInEditor', () => openAgentPanel(host)),
@@ -89,7 +94,9 @@ export function activate(context: vscode.ExtensionContext): void {
 			await mcp.restart();
 			vscode.window.showInformationMessage(vscode.l10n.t('MCP servers restarted.'));
 		}),
-		vscode.commands.registerCommand('nighthawk.ai.generateCommitMessage', (repository?: unknown) => generateCommitMessage(endpoints, repository)),
+		vscode.commands.registerCommand('nighthawk.ai.generateCommitMessage', (repository?: unknown) => generateCommitMessage(endpoints, usage, repository)),
+		vscode.commands.registerCommand('nighthawk.ai.showUsage', () => UsagePanel.show(context, usage, async id => (await view.show()).open(id))),
+		vscode.commands.registerCommand('nighthawk.ai.setMonthlyLimit', () => usage.editLimit()),
 		vscode.commands.registerCommand('nighthawk.agent.reviewBranch', async (repository?: unknown) => {
 			const target = await chooseReviewTarget(repository);
 			if (!target) {

@@ -120,6 +120,9 @@ export async function* streamOpenAI(endpoint: Endpoint, model: string, apiKey: s
 			usage.inputTokens = data.usage.prompt_tokens ?? usage.inputTokens;
 			usage.outputTokens = data.usage.completion_tokens ?? usage.outputTokens;
 			usage.cacheReadTokens = data.usage.prompt_tokens_details?.cached_tokens;
+			if (typeof data.usage.cost === 'number') {
+				usage.cost = data.usage.cost;
+			}
 		}
 		const choice = data.choices?.[0];
 		if (!choice) {

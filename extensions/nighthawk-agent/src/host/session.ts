@@ -22,12 +22,14 @@ import { diagnosticsTool, EditorWorkspace } from './editorWorkspace';
 import type { Endpoints } from './endpoints';
 import type { McpManager } from './mcpManager';
 import { findRipgrep, loadProject, locations, type Project } from './project';
+import { isBudgetError, type UsageMeter } from './usage';
 
 export interface Services {
 	context: vscode.ExtensionContext;
 	endpoints: Endpoints;
 	mcp: McpManager;
 	store: SessionStore;
+	usage: UsageMeter;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -42,6 +44,8 @@ export interface SessionData {
 	messages: Message[];
 	items: TranscriptItem[];
 	todos: Todo[];
+	/** US dollars spent on this conversation so far, as far as prices are known. */
+	cost?: number;
 }
 
 /** What a user message changed, so it can be rewound. */
@@ -102,6 +106,7 @@ export class Session implements vscode.Disposable {
 	private messages: Message[];
 	private items: TranscriptItem[];
 	private todos: Todo[];
+	private cost: number;
 
 	private readonly state = new SessionState();
 	private turns: Turn[] = [];
@@ -133,6 +138,7 @@ export class Session implements vscode.Disposable {
 		this.mode = data?.mode ?? vscode.workspace.getConfiguration('nighthawk.agent').get<PermissionMode>('permissionMode', 'default');
 		this.messages = data?.messages ?? [];
 		this.todos = data?.todos ?? [];
+		this.cost = data?.cost ?? 0;
 		this.started = !!data?.messages.length;
 		// A restored conversation cannot resume calls that were waiting.
 		this.items = (data?.items ?? []).map(item => {
@@ -187,6 +193,7 @@ export class Session implements vscode.Disposable {
 			running: this.running,
 			context: tokens !== undefined ? Math.min(1, tokens / this.contextWindow) : undefined,
 			tokens,
+			cost: this.cost || undefined,
 			todos: this.todos,
 			commands: this.commandList,
 			queued: this.queue.length,
@@ -510,8 +517,18 @@ export class Session implements vscode.Disposable {
 		}
 		const config = vscode.workspace.getConfiguration('nighthawk.agent');
 		const key = await this.services.endpoints.apiKey(choice.endpoint);
+		const stream = modelStream(choice.endpoint, choice.model, key, { thinking: config.get<boolean>('thinking', true), effort: config.get<string>('effort') || undefined });
 		return {
-			stream: modelStream(choice.endpoint, choice.model, key, { thinking: config.get<boolean>('thinking', true), effort: config.get<string>('effort') || undefined }),
+			stream: this.services.usage.track(stream, {
+				endpoint: choice.endpoint,
+				model: choice.model,
+				feature: 'agent',
+				session: () => ({ id: this.id, title: this.title }),
+				onCost: cost => {
+					this.cost += cost ?? 0;
+					this.postState();
+				},
+			}),
 			label: `${choice.model} (${choice.endpoint.name})`,
 			contextWindow: guessContextWindow(choice.endpoint, choice.model),
 		};
@@ -606,7 +623,9 @@ export class Session implements vscode.Disposable {
 		} catch (err) {
 			if (!signal.aborted) {
 				const message = String(err?.message ?? err);
-				const actions = [{ label: vscode.l10n.t('Retry'), action: 'retry' }];
+				const actions = isBudgetError(err)
+					? [{ label: vscode.l10n.t('Change Limit'), action: 'editLimit' }, { label: vscode.l10n.t('Allow This Month'), action: 'allowOverLimit' }, { label: vscode.l10n.t('Show Usage'), action: 'showUsage' }]
+					: [{ label: vscode.l10n.t('Retry'), action: 'retry' }];
 				if (/\b(401|403)\b|api key|unauthori[sz]ed|authentication/i.test(message)) {
 					actions.push({ label: vscode.l10n.t('Set API Key'), action: 'setKey' });
 				}
@@ -947,7 +966,7 @@ export class Session implements vscode.Disposable {
 	// --- persistence
 
 	toData(): SessionData {
-		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos };
+		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost };
 	}
 
 	private async save(): Promise<void> {

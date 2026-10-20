@@ -100,6 +100,48 @@
             "scope": "application",
             "default": "",
             "markdownDescription": "%config.ai.model%"
+          },
+          "nighthawk.ai.monthlyLimit": {
+            "type": "number",
+            "scope": "application",
+            "default": 0,
+            "minimum": 0,
+            "markdownDescription": "%config.ai.monthlyLimit%"
+          },
+          "nighthawk.ai.prices": {
+            "type": "object",
+            "scope": "application",
+            "default": {},
+            "markdownDescription": "%config.ai.prices%",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "input",
+                "output"
+              ],
+              "properties": {
+                "input": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.input%"
+                },
+                "output": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.output%"
+                },
+                "cacheRead": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.cacheRead%"
+                },
+                "cacheWrite": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.cacheWrite%"
+                }
+              }
+            }
           }
         }
       },
@@ -286,6 +328,17 @@
         "title": "%command.manageEndpoints%",
         "category": "%category.ai%",
         "icon": "$(server)"
+      },
+      {
+        "command": "nighthawk.ai.showUsage",
+        "title": "%command.showUsage%",
+        "category": "%category.ai%",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "nighthawk.ai.setMonthlyLimit",
+        "title": "%command.setMonthlyLimit%",
+        "category": "%category.ai%"
       },
       {
         "command": "nighthawk.ai.generateCommitMessage",

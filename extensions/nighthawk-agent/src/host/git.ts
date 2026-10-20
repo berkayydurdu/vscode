@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { cleanCommitMessage, commitMessageRequest } from '../core/commit';
 import { modelStream } from '../core/providers';
 import type { Endpoints } from './endpoints';
+import { isBudgetError, type UsageMeter } from './usage';
 
 /** The parts of the built-in Git extension's API (`extensions/git/src/api/git.d.ts`) used here. */
 interface GitRepository {
@@ -78,7 +79,7 @@ async function pickRepository(arg: unknown): Promise<GitRepository | undefined> 
 }
 
 /** Writes a commit message for the staged changes (or all changes when nothing is staged) into the Source Control input. */
-export async function generateCommitMessage(endpoints: Endpoints, arg: unknown): Promise<void> {
+export async function generateCommitMessage(endpoints: Endpoints, usage: UsageMeter, arg: unknown): Promise<void> {
 	const repository = await pickRepository(arg);
 	if (!repository) {
 		return;
@@ -100,7 +101,7 @@ export async function generateCommitMessage(endpoints: Endpoints, arg: unknown):
 	const subjects = (await repository.log({ maxEntries: 15 }).catch(() => [])).map(c => c.message.split('\n')[0]);
 	const request = commitMessageRequest(diff, subjects);
 	const key = await endpoints.apiKey(choice.endpoint);
-	const stream = modelStream(choice.endpoint, choice.model, key, { thinking: false });
+	const stream = usage.track(modelStream(choice.endpoint, choice.model, key, { thinking: false }), { endpoint: choice.endpoint, model: choice.model, feature: 'commit' });
 
 	await vscode.window.withProgress({ location: vscode.ProgressLocation.SourceControl, title: vscode.l10n.t('Writing a commit message...'), cancellable: true }, async (_progress, token) => {
 		const abort = new AbortController();
@@ -117,7 +118,16 @@ export async function generateCommitMessage(endpoints: Endpoints, arg: unknown):
 			repository.inputBox.value = cleanCommitMessage(text) || previous;
 		} catch (err) {
 			repository.inputBox.value = previous;
-			if (!abort.signal.aborted) {
+			if (isBudgetError(err)) {
+				const change = vscode.l10n.t('Change Limit');
+				const allow = vscode.l10n.t('Allow This Month');
+				const pick = await vscode.window.showWarningMessage(err.message, change, allow);
+				if (pick === change) {
+					await usage.editLimit();
+				} else if (pick === allow) {
+					await usage.allowThisMonth();
+				}
+			} else if (!abort.signal.aborted) {
 				vscode.window.showErrorMessage(vscode.l10n.t('Could not write a commit message: {0}', err.message ?? String(err)));
 			}
 		} finally {

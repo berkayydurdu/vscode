@@ -237,6 +237,16 @@ export class AgentController implements vscode.Disposable {
 			case 'endpoints':
 				await this.host.endpoints.manage();
 				break;
+			case 'editLimit':
+				await this.host.usage.editLimit();
+				break;
+			case 'allowOverLimit':
+				await this.host.usage.allowThisMonth();
+				this.session.retry();
+				break;
+			case 'showUsage':
+				await vscode.commands.executeCommand('nighthawk.ai.showUsage');
+				break;
 		}
 		this.session.postState();
 	}

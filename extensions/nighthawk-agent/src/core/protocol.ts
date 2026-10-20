@@ -85,6 +85,8 @@ export interface ViewState {
 	/** Share of the context window in use, 0 to 1. */
 	context?: number;
 	tokens?: number;
+	/** US dollars this conversation has cost so far. */
+	cost?: number;
 	todos: Todo[];
 	commands: SlashCommandInfo[];
 	queued: number;

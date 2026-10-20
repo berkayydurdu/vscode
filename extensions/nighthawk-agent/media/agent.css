@@ -1378,6 +1378,19 @@ kbd {
 	padding: 0 4px;
 }
 
+.cost {
+	font-size: 0.82em;
+	color: var(--muted);
+	padding: 1px 4px;
+	border-radius: var(--radius-small);
+	font-variant-numeric: tabular-nums;
+}
+
+.cost:hover {
+	color: var(--fg);
+	background: var(--raised-strong);
+}
+
 .ring-track {
 	stroke: var(--raised-strong);
 }
