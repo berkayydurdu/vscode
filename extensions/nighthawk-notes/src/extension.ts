@@ -12,6 +12,7 @@ import { Account } from './teams/account';
 import { LocalServer } from './teams/localServer';
 import type { Team } from './teams/client';
 import { InviteUriHandler, registerTeamCommands } from './teams/teamCommands';
+import { LiveEditing } from './teams/liveEditing';
 import { TEAM_SCHEME, TeamFileSystem, teamCollection, teamNoteUri } from './teams/teamFileSystem';
 import { VAULT_COLLECTION, Vault } from './vault';
 import { BacklinksProvider, TagsProvider, VaultTreeProvider } from './views/vaultViews';
@@ -263,7 +264,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			WorkspacePanel.show(context, account, teamFs, tracker, team).revealItem(number);
 		}
 	});
-	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() }, ticketStatus, tracker);
+	context.subscriptions.push({ dispose: () => WorkspacePanel.closeAll() }, ticketStatus, tracker, new LiveEditing(account, teamFs));
 	ticketStatus.showTracked(work => tracker.trackedToday(work), tracker.onDidChange);
 
 	try {

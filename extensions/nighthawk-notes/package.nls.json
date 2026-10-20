@@ -55,6 +55,8 @@
 	"config.timeTracking.roundTo": "Round suggested time to this many minutes.",
 	"config.timeTracking.reminder": "A time of day, such as `17:00`, after which Nighthawk reminds you once if tracked ticket time is not on your timesheet. Leave empty for no reminder.",
 	"config.server.url": "Address of the Nighthawk Notes server used for teams and shared notes.",
+	"config.teams.liveEditing": "Edit team notes live with everyone who has them open: their changes and cursors appear as they type, and the note saves itself on the server.",
+	"command.live.showPeople": "Go to Teammate in This Note",
 	"config.teams.syncInterval": "How often, in seconds, to fetch teammates' changes to shared notes. 0 turns automatic syncing off.",
 	"config.teams.inviteExpiryHours": "How many hours new invite links stay valid."
 }

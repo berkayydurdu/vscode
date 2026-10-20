@@ -35,5 +35,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 			store.close();
 			process.exit(0);
 		});
+		// Live note streams stay open otherwise.
+		server.closeAllConnections();
 	});
 }

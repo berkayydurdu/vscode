@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { TextOperation } from '../core/textOperation';
 import type { ServerStarter } from './localServer';
 
 // Types mirror notes-server/src/store.ts.
@@ -202,6 +203,32 @@ export class NotesClient {
 
 	deleteNote(teamId: string, noteId: string) {
 		return this.request('DELETE', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}`);
+	}
+
+	/** Opens a note's live stream of edits and cursors (server-sent events). */
+	async liveStream(teamId: string, noteId: string, client: string, signal: AbortSignal): Promise<AsyncIterable<Uint8Array>> {
+		const response = await fetch(`${this.serverUrl.replace(/\/+$/, '')}/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live?client=${enc(client)}`, {
+			headers: { Accept: 'text/event-stream', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+			signal,
+		});
+		if (!response.ok || !response.body) {
+			let message = response.statusText;
+			try {
+				message = (await response.json() as { error?: string }).error ?? message;
+			} catch {
+				// Not JSON; keep the status text.
+			}
+			throw new NotesServerError(response.status, message);
+		}
+		return response.body;
+	}
+
+	liveEdit(teamId: string, noteId: string, client: string, revision: number, op: TextOperation) {
+		return this.request<{ revision: number }>('POST', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live/edits`, { client, revision, op });
+	}
+
+	liveSelect(teamId: string, noteId: string, client: string, revision: number, selections: [number, number][]) {
+		return this.request('POST', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live/selections`, { client, revision, selections });
 	}
 }
 

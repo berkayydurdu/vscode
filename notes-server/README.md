@@ -47,6 +47,10 @@ A team always keeps at least one owner. Admins invite people from the team's con
 
 Each team's notes are Markdown files with paths like `Projects/Launch.md`. Every save carries the version it started from, and the server rejects a save that would overwrite someone else's newer change (HTTP 409); Nighthawk then offers to compare or overwrite. Clients fetch changes with `GET /api/teams/:id/notes?since=CURSOR`, which also reports deletions.
 
+### Live editing
+
+Everyone who has the same note open edits it together: each editor opens a stream of server-sent events for the note, posts its own edits and cursor positions, and gets everyone else's as they type. Edits are operational transforms (`src/textOperation.ts`): a list of numbers (positive keeps that many characters, negative deletes) and strings (inserted). The server puts edits in order, adjusts an edit made on an older revision for the ones made since, and saves the note a second after the last change, so the version history and the normal sync above keep working. A save through `PUT` while the note is open live reaches everyone as one more edit. Live sessions live in memory; if the server restarts, editors reconnect and merge what they typed meanwhile. Behind a reverse proxy, turn off response buffering for `/live` so events are not held back.
+
 ## Tickets, RFCs and time
 
 Each team has numbered items of three kinds: tasks and bugs move through `backlog`, `todo`, `in_progress`, `in_review` and `done`; RFCs through `draft`, `in_review`, `accepted`, `rejected` and `withdrawn`. Items carry assignees (or reviewers for RFCs), a priority (`urgent`, `high`, `medium`, `low`, `none`), labels, a due date, an estimate in minutes, a to-do checklist and comments. Editors review RFCs with `approve`, `request_changes` or `comment`. Time is booked as worklogs of whole minutes on a day; only the person who booked an entry, or an admin, can change it. Like notes, an item update may send `baseVersion` to be rejected (409) if someone changed it since, and `GET .../items?since=CURSOR` returns only what changed.
@@ -72,6 +76,9 @@ All endpoints take and return JSON. Send `Authorization: Bearer TOKEN` with the 
 | `POST /api/invites/:code/accept` | Join the team |
 | `GET`, `POST /api/teams/:id/notes` | List (`?since=`, `?content=1`); create `{path, content}` |
 | `GET`, `PUT`, `DELETE /api/teams/:id/notes/:noteId` | Read; update `{baseVersion, content?, path?}`; delete |
+| `GET /api/teams/:id/notes/:noteId/live?client=ID` | Live stream (server-sent events): `init`, `op`, `presence`, `join`, `leave`, `saved`, `deleted` |
+| `POST /api/teams/:id/notes/:noteId/live/edits` | Live edit `{client, revision, op}` (editor) |
+| `POST /api/teams/:id/notes/:noteId/live/selections` | Cursor positions `{client, revision, selections: [[anchor, head]]}` |
 | `GET`, `POST /api/teams/:id/items` | List (`?since=`); create `{kind, title, body?, status?, priority?, assignees?, reviewers?, labels?, dueDate?, estimateMinutes?, checklist?}` |
 | `GET`, `PATCH`, `DELETE /api/teams/:id/items/:itemId` | Item with comments, worklogs and reviews; update (same fields, plus `baseVersion?`); delete |
 | `POST /api/teams/:id/items/:itemId/comments` | Comment `{body}` |

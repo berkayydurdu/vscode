@@ -5,7 +5,9 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AttemptLimiter, hashPassword, hashToken, newInviteCode, newToken, verifyPassword } from './auth.ts';
+import { LiveError, LiveNotes, type Selection } from './live.ts';
 import { ConflictError, isInviteUsable, isRole, roleAtLeast, type Role, type Store, type User } from './store.ts';
+import { isTextOperation } from './textOperation.ts';
 import { isValidStatus, ITEM_KINDS, PRIORITIES, VERDICTS, type ChecklistEntry, type ItemChange, type ItemKind, type Priority, type Verdict } from './work.ts';
 
 export interface AppOptions {
@@ -52,6 +54,7 @@ interface Route {
 export function createApp(store: Store, options: AppOptions): Server {
 	const routes: Route[] = [];
 	const loginLimiter = new AttemptLimiter(10, 15 * 60 * 1000);
+	const live = new LiveNotes(store);
 
 	function route(method: string, path: string, auth: boolean, handler: Handler): void {
 		const keys: string[] = [];
@@ -330,6 +333,9 @@ export function createApp(store: Store, options: AppOptions): Server {
 		if (!note) {
 			throw new HttpError(404, 'Note not found');
 		}
+		if (content !== undefined) {
+			live.replaced(note.id, note.content, requireUser(ctx).id);
+		}
 		return { note };
 	});
 
@@ -338,6 +344,42 @@ export function createApp(store: Store, options: AppOptions): Server {
 		if (!store.deleteNote(ctx.params.teamId, ctx.params.noteId, requireUser(ctx).id)) {
 			throw new HttpError(404, 'Note not found');
 		}
+		live.deleted(ctx.params.noteId);
+		return { ok: true };
+	});
+
+	// --- editing a note together, live
+
+	function liveClient(value: unknown): string {
+		if (typeof value !== 'string' || !/^[\w-]{8,64}$/.test(value)) {
+			throw new HttpError(400, 'client must be 8 to 64 letters, digits, - or _');
+		}
+		return value;
+	}
+
+	route('GET', '/api/teams/:teamId/notes/:noteId/live', true, ctx => {
+		const role = requireRole(ctx, 'viewer');
+		live.join(ctx.params.teamId, ctx.params.noteId, liveClient(ctx.query.get('client')), requireUser(ctx), roleAtLeast(role, 'editor'), ctx.res);
+		return STREAMING;
+	});
+
+	route('POST', '/api/teams/:teamId/notes/:noteId/live/edits', true, ctx => {
+		requireRole(ctx, 'editor');
+		const { op, revision } = ctx.body;
+		if (!isTextOperation(op) || typeof revision !== 'number') {
+			throw new HttpError(400, 'op and revision are required');
+		}
+		return { revision: live.edit(ctx.params.noteId, liveClient(ctx.body.client), requireUser(ctx).id, revision, op, MAX_NOTE_BYTES) };
+	});
+
+	route('POST', '/api/teams/:teamId/notes/:noteId/live/selections', true, ctx => {
+		requireRole(ctx, 'viewer');
+		const { selections, revision } = ctx.body;
+		const valid = Array.isArray(selections) && selections.every(s => Array.isArray(s) && s.length === 2 && s.every(n => Number.isInteger(n) && n >= 0));
+		if (!valid || typeof revision !== 'number') {
+			throw new HttpError(400, 'selections and revision are required');
+		}
+		live.select(ctx.params.noteId, liveClient(ctx.body.client), requireUser(ctx).id, revision, selections as Selection[]);
 		return { ok: true };
 	});
 
@@ -612,7 +654,7 @@ export function createApp(store: Store, options: AppOptions): Server {
 		`));
 	});
 
-	return createServer((req, res) => {
+	const server = createServer((req, res) => {
 		handle(req, res).catch(err => {
 			console.error(err);
 			if (!res.headersSent) {
@@ -620,6 +662,8 @@ export function createApp(store: Store, options: AppOptions): Server {
 			}
 		});
 	});
+	server.on('close', () => live.saveAll());
+	return server;
 
 	async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		const url = new URL(req.url ?? '/', 'http://localhost');
@@ -644,6 +688,9 @@ export function createApp(store: Store, options: AppOptions): Server {
 				}
 				const body = method === 'GET' || method === 'HEAD' ? {} : await readJson(req);
 				const result = await r.handler({ req, res, params, query: url.searchParams, body, user, token });
+				if (result === STREAMING) {
+					return; // The handler keeps the response open.
+				}
 				if (result instanceof RawBody) {
 					res.end(result.body);
 				} else {
@@ -651,6 +698,8 @@ export function createApp(store: Store, options: AppOptions): Server {
 				}
 			} catch (err) {
 				if (err instanceof HttpError) {
+					sendJson(res, err.status, { error: err.message });
+				} else if (err instanceof LiveError) {
 					sendJson(res, err.status, { error: err.message });
 				} else if (err instanceof ConflictError) {
 					sendJson(res, 409, { error: err.message });
@@ -663,6 +712,9 @@ export function createApp(store: Store, options: AppOptions): Server {
 		sendJson(res, pathMatched ? 405 : 404, { error: pathMatched ? 'Method not allowed' : 'Not found' });
 	}
 }
+
+/** Returned by a handler that keeps writing to the response itself. */
+const STREAMING = Symbol('streaming');
 
 class RawBody {
 	readonly body: string;

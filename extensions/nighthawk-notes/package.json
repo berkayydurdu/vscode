@@ -93,6 +93,11 @@
           "description": "%config.server.url%",
           "scope": "application"
         },
+        "nighthawk.notes.teams.liveEditing": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.teams.liveEditing%"
+        },
         "nighthawk.notes.teams.syncInterval": {
           "type": "number",
           "default": 15,
@@ -154,6 +159,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "nighthawk.notes.live.showPeople",
+        "title": "%command.live.showPeople%",
+        "category": "%category%"
+      },
       {
         "command": "nighthawk.notes.newNote",
         "title": "%command.newNote%",
@@ -353,6 +363,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "nighthawk.notes.live.showPeople",
+          "when": "resourceScheme == nighthawk-team"
+        },
         {
           "command": "nighthawk.notes.followLink",
           "when": "false"
@@ -652,7 +666,7 @@
     "compile": "npx gulp compile-extension:nighthawk-notes && npm run build-webview",
     "watch": "npm run build-webview && npx gulp watch-extension:nighthawk-notes",
     "build-webview": "node ./esbuild.webview.mts",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --import ./test/setup.ts --test \"test/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "24.x"
