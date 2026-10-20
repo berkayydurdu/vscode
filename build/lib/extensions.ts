@@ -317,6 +317,9 @@ const nativeExtensions = [
 
 const excludedExtensions = [
 	'copilot',
+	// Nighthawk: Microsoft account sign-in and port forwarding through Microsoft dev tunnels are not shipped
+	'microsoft-authentication',
+	'tunnel-forwarding',
 	'vscode-api-tests',
 	'vscode-colorize-tests',
 	'vscode-colorize-perf-tests',

@@ -86,15 +86,6 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
-      # The copilot extension's postinstall does not always lay out
-      # @github/copilot/sdk during the root npm ci; re-run it if missing.
-      - name: Ensure Copilot SDK layout
-        working-directory: extensions/copilot
-        run: |
-          if [ ! -f node_modules/@github/copilot/sdk/index.js ]; then
-            npx tsx ./script/postinstall.ts
-          fi
-
       - name: Build Linux x64 binary
         run: npm run gulp vscode-linux-x64-min
 
@@ -151,14 +142,6 @@ jobs:
         env:
           npm_config_foreground_scripts: "true"
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-
-      - name: Ensure Copilot SDK layout
-        working-directory: extensions/copilot
-        shell: bash
-        run: |
-          if [ ! -f node_modules/@github/copilot/sdk/index.js ]; then
-            npx tsx ./script/postinstall.ts
-          fi
 
       # The packaging step calls signtool.exe, which ships with the Windows SDK
       # on the runner but is not on PATH.
