@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { listModels, PRESETS, type Preset } from '../core/providers';
+import { listModels, PRESETS, suggestModel, type Preset } from '../core/providers';
 import type { Endpoint, ProviderKind } from '../core/types';
 
 const KEY_PREFIX = 'nighthawk.ai.key/';
@@ -12,6 +12,21 @@ const KEY_PREFIX = 'nighthawk.ai.key/';
 export interface ModelChoice {
 	endpoint: Endpoint;
 	model: string;
+}
+
+/** A setup request from the welcome screen, which collects the provider and key itself. */
+export interface QuickSetup {
+	preset: string;
+	apiKey?: string;
+	baseUrl?: string;
+	/** Set to save the endpoint with these models; the first becomes the current model. Omit to only check the connection. */
+	models?: string[];
+}
+
+export interface QuickSetupResult {
+	name: string;
+	models: string[];
+	suggested?: string;
 }
 
 /**
@@ -204,6 +219,49 @@ export class Endpoints implements vscode.Disposable {
 		}
 		vscode.window.showInformationMessage(vscode.l10n.t('Added {0} with {1} model(s).', name, endpoint.models.length));
 		return endpoint;
+	}
+
+	/**
+	 * Adds an endpoint without prompts. Without `models` it only connects and returns the models
+	 * the endpoint offers. Throws with a readable message when the endpoint cannot be reached.
+	 */
+	async quickSetup(setup: QuickSetup): Promise<QuickSetupResult> {
+		const preset = PRESETS.find(p => p.id === setup.preset);
+		if (!preset) {
+			throw new Error(vscode.l10n.t('Unknown provider "{0}".', setup.preset));
+		}
+		const key = setup.apiKey?.trim() || undefined;
+		if (preset.needsKey && !key) {
+			throw new Error(vscode.l10n.t('Enter your {0} API key.', preset.label));
+		}
+		const name = preset.label.replace(/\s*\(.*\)$/, '');
+		const endpoint: Endpoint = { name, provider: preset.provider, baseUrl: setup.baseUrl?.trim() || preset.baseUrl, models: [] };
+
+		if (!setup.models) {
+			let available: string[];
+			try {
+				available = await listModels(endpoint, key, AbortSignal.timeout(15_000));
+			} catch (err) {
+				if (!preset.models.length) {
+					throw new Error(vscode.l10n.t('Could not connect to {0}: {1}', name, String(err.message ?? err).slice(0, 200)));
+				}
+				available = [];
+			}
+			const models = available.length ? available : preset.models;
+			return { name, models, suggested: suggestModel(preset, models) };
+		}
+
+		const models = setup.models.map(m => m.trim()).filter(Boolean);
+		if (!models.length) {
+			throw new Error(vscode.l10n.t('Choose a model.'));
+		}
+		endpoint.models = models;
+		if (key) {
+			await this.context.secrets.store(KEY_PREFIX + name, key);
+		}
+		await this.save([...this.list().filter(e => e.name !== name), endpoint]);
+		await this.setModel(endpoint, models[0]);
+		return { name, models };
 	}
 
 	/** Returns '' to skip, undefined to cancel. */

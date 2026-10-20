@@ -14,6 +14,18 @@
   "contributes": {
     "themes": [
       {
+        "id": "Nighthawk Dark",
+        "label": "%nighthawkDarkThemeLabel%",
+        "uiTheme": "vs-dark",
+        "path": "./themes/nighthawk-dark.json"
+      },
+      {
+        "id": "Nighthawk Light",
+        "label": "%nighthawkLightThemeLabel%",
+        "uiTheme": "vs",
+        "path": "./themes/nighthawk-light.json"
+      },
+      {
         "id": "Light 2026",
         "label": "%light2026ThemeLabel%",
         "uiTheme": "vs",

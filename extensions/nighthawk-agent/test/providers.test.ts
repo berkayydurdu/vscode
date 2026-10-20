@@ -9,7 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { anthropicBody, assembleAnthropicMessage, parseClaudeModel } from '../src/core/anthropic.ts';
 import { toOpenAIMessages } from '../src/core/openai.ts';
-import { modelStream } from '../src/core/providers.ts';
+import { modelStream, PRESETS, suggestModel } from '../src/core/providers.ts';
 import { readSse } from '../src/core/sse.ts';
 import type { Endpoint, Message, StreamEvent } from '../src/core/types.ts';
 
@@ -198,5 +198,20 @@ describe('modelStream over HTTP', () => {
 			assert.equal(done.usage.inputTokens, 50);
 		}
 		assert.equal(seen.at(-1)!.url, '/v1/chat/completions');
+	});
+});
+
+describe('suggestModel', () => {
+	const anthropic = PRESETS.find(p => p.id === 'anthropic');
+	const openrouter = PRESETS.find(p => p.id === 'openrouter');
+
+	it('prefers the preset default the endpoint offers', () => {
+		assert.equal(suggestModel(anthropic, ['claude-haiku-5-5', 'claude-sonnet-5-5']), 'claude-sonnet-5-5');
+	});
+
+	it('falls back to a strong coding model, then to the first model', () => {
+		assert.equal(suggestModel(openrouter, ['meta/llama-3-8b', 'openai/gpt-5', 'anthropic/claude-sonnet-5-5']), 'openai/gpt-5');
+		assert.equal(suggestModel(openrouter, ['tiny-model', 'other']), 'tiny-model');
+		assert.equal(suggestModel(undefined, []), undefined);
 	});
 });
