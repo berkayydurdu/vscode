@@ -272,6 +272,14 @@ export class Session implements vscode.Disposable {
 		await this.startTurn(trimmed, trimmed);
 	}
 
+	/** Runs a prompt written by a command, showing `shown` in the transcript instead of the full prompt. */
+	async sendTask(shown: string, prompt: string): Promise<void> {
+		if (this.running) {
+			this.stop();
+		}
+		await this.startTurn(shown, prompt);
+	}
+
 	/** Adds a user message and runs the agent. `shown` is what the transcript shows. */
 	private async startTurn(shown: string, prompt: string): Promise<void> {
 		const item = { kind: 'user' as const, id: newId('u'), text: shown, canRewind: true };

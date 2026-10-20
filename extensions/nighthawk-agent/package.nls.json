@@ -19,6 +19,8 @@
 	"command.setApiKey": "Set API Key",
 	"command.removeEndpoint": "Remove Model Endpoint",
 	"command.manageEndpoints": "Manage Model Endpoints",
+	"command.generateCommitMessage": "Generate Commit Message",
+	"command.reviewBranch": "Review Branch Before Push",
 	"config.ai.title": "AI Models",
 	"config.ai.endpoints": "Model endpoints the agent can use. Add them with **AI: Add Model Endpoint**; API keys are stored in the OS keychain, not here.",
 	"config.ai.endpoints.name": "A unique name, shown in the model picker.",

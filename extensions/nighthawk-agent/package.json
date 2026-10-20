@@ -286,6 +286,18 @@
         "title": "%command.manageEndpoints%",
         "category": "%category.ai%",
         "icon": "$(server)"
+      },
+      {
+        "command": "nighthawk.ai.generateCommitMessage",
+        "title": "%command.generateCommitMessage%",
+        "category": "%category.ai%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.agent.reviewBranch",
+        "title": "%command.reviewBranch%",
+        "category": "%category.agent%",
+        "icon": "$(checklist)"
       }
     ],
     "menus": {
@@ -314,6 +326,19 @@
           "command": "nighthawk.agent.restartMcp",
           "when": "view == nighthawk.agent.chat",
           "group": "1_settings@2"
+        }
+      ],
+      "scm/inputBox": [
+        {
+          "command": "nighthawk.ai.generateCommitMessage",
+          "when": "scmProvider == git"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "nighthawk.agent.reviewBranch",
+          "when": "scmProvider == git",
+          "group": "navigation@50"
         }
       ],
       "editor/context": [

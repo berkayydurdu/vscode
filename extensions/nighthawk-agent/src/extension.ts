@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
 import { Endpoints, type QuickSetup } from './host/endpoints';
+import { chooseReviewTarget, generateCommitMessage } from './host/git';
+import { branchReviewPrompt } from './core/commit';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
 
@@ -86,6 +88,19 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.agent.restartMcp', async () => {
 			await mcp.restart();
 			vscode.window.showInformationMessage(vscode.l10n.t('MCP servers restarted.'));
+		}),
+		vscode.commands.registerCommand('nighthawk.ai.generateCommitMessage', (repository?: unknown) => generateCommitMessage(endpoints, repository)),
+		vscode.commands.registerCommand('nighthawk.agent.reviewBranch', async (repository?: unknown) => {
+			const target = await chooseReviewTarget(repository);
+			if (!target) {
+				return;
+			}
+			const controller = await view.show();
+			controller.startNew();
+			const shown = target.branch
+				? vscode.l10n.t('Review the branch {0} against {1} before it is pushed.', target.branch, target.base)
+				: vscode.l10n.t('Review this branch against {0} before it is pushed.', target.base);
+			await controller.session.sendTask(shown, branchReviewPrompt(target.base, target.branch));
 		}),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
 		vscode.commands.registerCommand('nighthawk.ai.selectModel', () => endpoints.pickModel()),
