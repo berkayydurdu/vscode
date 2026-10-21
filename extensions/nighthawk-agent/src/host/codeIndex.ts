@@ -14,6 +14,7 @@ import { listModels } from '../core/providers';
 import type { CodebaseSearchResult } from '../core/tools';
 import type { Endpoint } from '../core/types';
 import { formatCost, isLocalEndpoint } from '../core/usage';
+import { isInside } from '../core/workspace';
 import type { Endpoints } from './endpoints';
 import { findRipgrep } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
@@ -195,8 +196,14 @@ export class CodebaseIndexer implements vscode.Disposable {
 
 	private watch(roots: string[]): void {
 		const watcher = vscode.workspace.createFileSystemWatcher('**/*');
-		const skipped = new RegExp(`[\\\\/](?:${EXCLUDED_DIRS.map(d => d.replace(/[.]/g, '\\.')).join('|')})(?:[\\\\/]|$)`);
-		const inScope = (uri: vscode.Uri) => uri.scheme === 'file' && !skipped.test(uri.fsPath) && roots.some(r => uri.fsPath.startsWith(r));
+		const excluded = new Set(EXCLUDED_DIRS);
+		const inScope = (uri: vscode.Uri) => {
+			if (uri.scheme !== 'file') {
+				return false;
+			}
+			const root = roots.find(r => isInside(r, uri.fsPath));
+			return !!root && !path.relative(root, uri.fsPath).split(/[\\/]/).some(part => excluded.has(part));
+		};
 		const onChange = (uri: vscode.Uri) => {
 			// A change to a file that is not indexed is to an ignored or too large file.
 			if (inScope(uri) && this.index?.has(uri.fsPath)) {
