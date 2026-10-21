@@ -30,11 +30,11 @@ import { ILogService } from '../../log/common/log.js';
 import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 import { INativeHostMainService } from '../../native/electron-main/nativeHostMainService.js';
 import { IProductService } from '../../product/common/productService.js';
-import { asJson, IRequestService } from '../../request/common/request.js';
+import { IRequestService } from '../../request/common/request.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { AvailableForDownload, DisablementReason, IUpdate, State, StateType, UpdateType } from '../common/update.js';
-import { AbstractUpdateService, createUpdateURL, getUpdateRequestHeaders, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
+import { AbstractUpdateService, getUpdateRequestHeaders, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
 import { getRelaunchArguments } from './updateRelaunchArguments.js';
 import { getWin32UpdateType } from './win32UpdateType.js';
 
@@ -63,7 +63,8 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 	private readonly setupMutexName: string;
 
 	private get cachePathSync(): string {
-		return path.join(tmpdir(), `vscode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
+		const prefix = this.productService.quality ? `vscode-${this.productService.quality}` : this.productService.applicationName;
+		return path.join(tmpdir(), `${prefix}-${this.productService.target}-${process.arch}`);
 	}
 
 	@memoize
@@ -205,7 +206,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		});
 	}
 
-	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string | undefined {
+	protected override getUpdatePlatform(): string {
 		let platform = `win32-${process.arch}`;
 
 		if (this.getUpdateType() === UpdateType.Archive) {
@@ -214,7 +215,11 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 			platform += '-user';
 		}
 
-		return createUpdateURL(this.productService.updateUrl!, platform, quality, commit, options);
+		return platform;
+	}
+
+	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string | undefined {
+		return this.createFeedUrl(quality, commit, options);
 	}
 
 	protected doCheckForUpdates(explicit: boolean, pendingCommit?: string): void {
@@ -225,6 +230,9 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		const internalOrg = this.getInternalOrg();
 		const background = !explicit && !internalOrg;
 		const url = this.buildUpdateFeedUrl(this.quality, pendingCommit ?? this.productService.commit!, { background, internalOrg });
+		if (!url) {
+			return;
+		}
 
 		// Only set CheckingForUpdates if we're not already in Overwriting state
 		if (this.state.type !== StateType.Overwriting) {
@@ -237,8 +245,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		const token = cts.token;
 
 		const headers = getUpdateRequestHeaders(this.productService.version);
-		const promise = this.requestService.request({ url, headers, callSite: 'updateService.win32.checkForUpdates' }, token)
-			.then<IUpdate | null>(asJson)
+		const promise = this.requestUpdate(url, headers, 'updateService.win32.checkForUpdates', token)
 			.then(update => {
 				const updateType = this.getUpdateType();
 

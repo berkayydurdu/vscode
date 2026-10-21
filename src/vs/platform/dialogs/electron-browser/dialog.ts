@@ -16,6 +16,9 @@ function formatCopilotVersion(version: string | undefined): string {
 
 export function createNativeAboutDialogDetails(productService: IProductService, osProps: IOSProperties): { title: string; details: string; detailsToCopy: string } {
 	let version = productService.version;
+	if (productService.buildNumber) {
+		version = `${version} build ${productService.buildNumber}`;
+	}
 	if (productService.target) {
 		version = `${version} (${productService.target} setup)`;
 	} else if (productService.darwinUniversalAssetId) {

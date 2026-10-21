@@ -50,6 +50,26 @@ function guid(brand: Brand, purpose: string): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+/**
+ * Auto-update checks the repository's GitHub Releases, which the Fork Build workflow publishes
+ * on every push to main. The asset names must match the files that workflow uploads.
+ */
+function releaseUpdates(brand: Brand): { url: string; assets: Record<string, string> } {
+	const repository = new URL(brand.repository);
+	if (repository.hostname !== 'github.com') {
+		throw new Error(`brand.json: "repository" must be a github.com URL for updates, got "${brand.repository}"`);
+	}
+	const compact = brand.name.replace(/[^A-Za-z0-9]/g, '');
+	return {
+		url: `https://api.github.com/repos${repository.pathname.replace(/\/$/, '')}/releases`,
+		assets: {
+			'win32-x64-user': `${compact}UserSetup-x64.exe`,
+			'win32-x64-archive': `${brand.id}-win32-x64.zip`,
+			'linux-x64': `${brand.id}-linux-x64.tar.gz`,
+		},
+	};
+}
+
 function applyProduct(brand: Brand): void {
 	const productPath = path.join(root, 'product.json');
 	const product = JSON.parse(fs.readFileSync(productPath, 'utf8'));
@@ -87,6 +107,7 @@ function applyProduct(brand: Brand): void {
 		linuxIconName: brand.id,
 		reportIssueUrl: `${brand.repository}/issues/new`,
 		urlProtocol: brand.id,
+		releaseUpdates: releaseUpdates(brand),
 	});
 
 	fs.writeFileSync(productPath, JSON.stringify(product, null, '\t') + '\n');

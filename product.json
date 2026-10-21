@@ -243,5 +243,13 @@
 		}
 	],
 	"builtInExtensionsEnabledWithAutoUpdates": [],
-	"sessionsWindowAllowedExtensions": []
+	"sessionsWindowAllowedExtensions": [],
+	"releaseUpdates": {
+		"url": "https://api.github.com/repos/berkayydurdu/vscode/releases",
+		"assets": {
+			"win32-x64-user": "NighthawkUserSetup-x64.exe",
+			"win32-x64-archive": "nighthawk-win32-x64.zip",
+			"linux-x64": "nighthawk-linux-x64.tar.gz"
+		}
+	}
 }

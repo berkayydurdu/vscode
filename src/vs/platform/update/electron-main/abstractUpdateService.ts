@@ -17,10 +17,11 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { ILifecycleMainService, LifecycleMainPhase } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
-import { IRequestService } from '../../request/common/request.js';
+import { asJson, IRequestService } from '../../request/common/request.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
+import { findLatestRelease, findReleaseUpdate, toUpdate } from '../common/releaseUpdates.js';
 import { AvailableForDownload, DisablementReason, IUpdate, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 
 const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
@@ -203,7 +204,10 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 			return;
 		}
 
-		if (!this.productService.updateUrl || !this.productService.commit) {
+		const missingConfiguration = this.productService.releaseUpdates
+			? this.productService.buildNumber === undefined
+			: !this.productService.updateUrl;
+		if (missingConfiguration || !this.productService.commit) {
 			this.setDisabledPermanently(DisablementReason.MissingConfiguration);
 			this.logService.info('update#ctor - updates are disabled as there is no update URL');
 			return;
@@ -443,7 +447,11 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 	}
 
 	private getProductQuality(updateMode: string): string | undefined {
-		return updateMode === 'none' ? undefined : this.productService.quality;
+		if (updateMode === 'none') {
+			return undefined;
+		}
+		// Release updates have a single channel, so builds without a quality still update.
+		return this.productService.quality ?? (this.productService.releaseUpdates ? 'stable' : undefined);
 	}
 
 	private scheduleCheckForUpdates(delay = 60 * 60 * 1000, repeat = true): void {
@@ -663,6 +671,21 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 			return undefined;
 		}
 
+		if (this.productService.releaseUpdates) {
+			const assetName = this.getReleaseAssetName();
+			if (!assetName) {
+				return undefined;
+			}
+			try {
+				const latest = findLatestRelease(await this.requestReleases(url, 'updateService.isLatestVersion', token), assetName);
+				return latest ? toUpdate(latest, false).version === (commit ?? this.productService.commit) : undefined;
+			} catch (error) {
+				this.logService.error('update#isLatestVersion(): failed to check for updates');
+				this.logService.error(error);
+				return undefined;
+			}
+		}
+
 		const headers = getUpdateRequestHeaders(this.productService.version);
 		this.logService.trace('update#isLatestVersion() - checking update server', { url, headers });
 
@@ -699,6 +722,79 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 
 	protected getUpdateType(): UpdateType {
 		return UpdateType.Archive;
+	}
+
+	/**
+	 * The platform part of update feed URLs (e.g. `win32-x64-user`), which also picks the release
+	 * asset for release updates. `undefined` when this platform has no release updates.
+	 */
+	protected getUpdatePlatform(): string | undefined {
+		return undefined;
+	}
+
+	/** The update feed URL: the update server's, or the GitHub releases list for release updates. */
+	protected createFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string | undefined {
+		const platform = this.getUpdatePlatform();
+		const releaseUpdates = this.productService.releaseUpdates;
+
+		if (!releaseUpdates) {
+			return platform ? createUpdateURL(this.productService.updateUrl!, platform, quality, commit, options) : undefined;
+		}
+
+		try {
+			const url = new URL(releaseUpdates.url);
+			// Plain http only for a local test server.
+			const isLoopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+			if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
+				return undefined;
+			}
+			url.searchParams.set('per_page', '20');
+			return url.toString();
+		} catch {
+			return undefined;
+		}
+	}
+
+	private getReleaseAssetName(): string | undefined {
+		const platform = this.getUpdatePlatform();
+		const assets = this.productService.releaseUpdates?.assets;
+		return platform && assets && Object.prototype.hasOwnProperty.call(assets, platform) ? assets[platform] : undefined;
+	}
+
+	private async requestReleases(url: string, callSite: string, token: CancellationToken): Promise<unknown> {
+		const headers = {
+			'Accept': 'application/vnd.github+json',
+			'X-GitHub-Api-Version': '2022-11-28',
+			// GitHub's API refuses requests without a User-Agent.
+			'User-Agent': `${this.productService.applicationName}/${this.productService.version}`,
+		};
+		const context = await this.requestService.request({ url, headers, callSite }, token);
+		const statusCode = context.res.statusCode;
+		if (statusCode === 403 || statusCode === 429) {
+			throw new Error(`GitHub is limiting requests right now (status ${statusCode}). Try again in an hour.`);
+		}
+		return asJson(context);
+	}
+
+	/**
+	 * Fetches the update offered at `url`, or `null` when the running build is the latest. For
+	 * release updates `url` lists the GitHub releases; otherwise it is the update server's feed.
+	 */
+	protected async requestUpdate(url: string, headers: Record<string, string> | undefined, callSite: string, token: CancellationToken): Promise<IUpdate | null> {
+		if (!this.productService.releaseUpdates) {
+			return asJson<IUpdate>(await this.requestService.request({ url, headers, callSite }, token));
+		}
+
+		const assetName = this.getReleaseAssetName();
+		if (!assetName) {
+			return null;
+		}
+
+		// Installers are downloaded and run; archives open the release page instead.
+		const download = this.getUpdateType() === UpdateType.Setup;
+		const update = findReleaseUpdate(await this.requestReleases(url, callSite, token), assetName, this.productService.buildNumber ?? Number.MAX_SAFE_INTEGER, download);
+		this.logService.info('update#requestUpdate - latest release', update ? `${update.productVersion} (${update.version})` : 'is the running build');
+		return update;
 	}
 
 	protected doQuitAndInstall(): void {

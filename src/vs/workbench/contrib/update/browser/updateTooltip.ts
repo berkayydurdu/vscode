@@ -21,6 +21,10 @@ import './media/updateTooltip.css';
 /**
  * A stateful tooltip control for the update status.
  */
+function withBuildNumber(version: string, buildNumber: number | undefined): string {
+	return buildNumber ? localize('updateTooltip.versionWithBuild', "{0} build {1}", version, buildNumber) : version;
+}
+
 export class UpdateTooltip extends Disposable {
 	public readonly domNode: HTMLElement;
 
@@ -139,9 +143,9 @@ export class UpdateTooltip extends Disposable {
 	}
 
 	private updateCurrentVersion() {
-		const productVersion = this.productService.version;
+		const productVersion = withBuildNumber(this.productService.version, this.productService.buildNumber);
 		if (productVersion) {
-			const currentCommitId = this.productService.commit?.substring(0, 7);
+			const currentCommitId = this.productService.buildNumber ? undefined : this.productService.commit?.substring(0, 7);
 			this.currentVersionNode.textContent = currentCommitId
 				? localize('updateTooltip.currentVersionLabelWithCommit', "Current Version: {0} ({1})", productVersion, currentCommitId)
 				: localize('updateTooltip.currentVersionLabel', "Current Version: {0}", productVersion);
@@ -379,11 +383,13 @@ export class UpdateTooltip extends Disposable {
 		// Latest version
 		const version = update?.productVersion;
 		if (version) {
-			const updateCommitId = update.version?.substring(0, 7);
+			// Builds from GitHub Releases share a version number, so show the build number instead of the commit.
+			const label = withBuildNumber(version, update.buildNumber);
+			const updateCommitId = update.buildNumber ? undefined : update.version?.substring(0, 7);
 			this.latestVersionNode.textContent = updateCommitId
-				? localize('updateTooltip.latestVersionLabelWithCommit', "Latest Version: {0} ({1})", version, updateCommitId)
-				: localize('updateTooltip.latestVersionLabel', "Latest Version: {0}", version);
-			this.latestVersionCopyValue.value = updateCommitId ? `${version} (${update.version})` : version;
+				? localize('updateTooltip.latestVersionLabelWithCommit', "Latest Version: {0} ({1})", label, updateCommitId)
+				: localize('updateTooltip.latestVersionLabel', "Latest Version: {0}", label);
+			this.latestVersionCopyValue.value = updateCommitId ? `${label} (${update.version})` : label;
 			this.latestVersionNode.parentElement!.style.display = '';
 			this.latestVersionCopyButton.tabIndex = 0;
 		} else {
@@ -400,8 +406,8 @@ export class UpdateTooltip extends Disposable {
 			this.releaseDateNode.style.display = 'none';
 		}
 
-		// Release notes button
-		this.releaseNotesVersion = version ?? this.productService.version;
+		// Release notes button (only when there are release notes to show)
+		this.releaseNotesVersion = this.productService.releaseNotesUrl ? version ?? this.productService.version : undefined;
 		this.releaseNotesButton.style.display = this.releaseNotesVersion ? '' : 'none';
 		this.releaseNotesButton.tabIndex = this.releaseNotesVersion ? 0 : -1;
 		this.releaseNotesButton.style.marginRight = this.releaseNotesVersion ? 'auto' : '';
