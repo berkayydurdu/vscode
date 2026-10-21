@@ -12,6 +12,7 @@ run({
 	entryPoints: {
 		'agent': path.join(srcDir, 'main.ts'),
 		'usage': path.join(srcDir, 'usage.ts'),
+		'inlineEdit': path.join(srcDir, 'inlineEdit.ts'),
 	},
 	srcDir,
 	outdir: outDir,

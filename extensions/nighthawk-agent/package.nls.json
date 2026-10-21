@@ -70,5 +70,14 @@
 	"command.background.stop": "Stop",
 	"command.background.discard": "Discard",
 	"config.agent.background.maxParallel": "How many background agents work at the same time. More wait in a queue.",
-	"config.agent.background.permissionMode": "What background agents may do without asking. Edits stay inside their own worktree either way."
+	"config.agent.background.permissionMode": "What background agents may do without asking. Edits stay inside their own worktree either way.",
+	"command.inlineEdit.start": "Edit Inline...",
+	"command.inlineEdit.accept": "Accept Inline Edit",
+	"command.inlineEdit.reject": "Reject Inline Edit",
+	"command.inlineEdit.acceptChange": "Accept This Change",
+	"command.inlineEdit.rejectChange": "Reject This Change",
+	"command.inlineEdit.cancel": "Stop Inline Edit",
+	"command.inlineEdit.selectModel": "Select Model for Inline Edits...",
+	"config.inlineEdit.title": "Inline Edit",
+	"config.inlineEdit.model": "The model for inline edits (`Ctrl+I` in the editor), as `Endpoint name/model id`. Leave empty to use the agent's model. A fast model makes edits feel instant."
 }

@@ -10,7 +10,8 @@
   },
   "enabledApiProposals": [
     "contribSourceControlInputBoxMenu",
-    "terminalQuickFixProvider"
+    "terminalQuickFixProvider",
+    "editorInsets"
   ],
   "categories": [
     "AI",
@@ -265,6 +266,17 @@
             "markdownDescription": "%config.agent.hooks%"
           }
         }
+      },
+      {
+        "title": "%config.inlineEdit.title%",
+        "properties": {
+          "nighthawk.inlineEdit.model": {
+            "type": "string",
+            "scope": "application",
+            "default": "",
+            "markdownDescription": "%config.inlineEdit.model%"
+          }
+        }
       }
     ],
     "viewsContainers": {
@@ -451,6 +463,45 @@
         "title": "%command.terminal.explainError%",
         "category": "%category.terminal%",
         "icon": "$(question)"
+      },
+      {
+        "command": "nighthawk.inlineEdit.start",
+        "title": "%command.inlineEdit.start%",
+        "category": "%category.ai%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.inlineEdit.accept",
+        "title": "%command.inlineEdit.accept%",
+        "category": "%category.ai%",
+        "icon": "$(check)"
+      },
+      {
+        "command": "nighthawk.inlineEdit.reject",
+        "title": "%command.inlineEdit.reject%",
+        "category": "%category.ai%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "nighthawk.inlineEdit.acceptChange",
+        "title": "%command.inlineEdit.acceptChange%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.inlineEdit.rejectChange",
+        "title": "%command.inlineEdit.rejectChange%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.inlineEdit.cancel",
+        "title": "%command.inlineEdit.cancel%",
+        "category": "%category.ai%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "nighthawk.inlineEdit.selectModel",
+        "title": "%command.inlineEdit.selectModel%",
+        "category": "%category.ai%"
       }
     ],
     "menus": {
@@ -482,6 +533,30 @@
         {
           "command": "nighthawk.agent.background.discard",
           "when": "false"
+        },
+        {
+          "command": "nighthawk.inlineEdit.accept",
+          "when": "nighthawk.inlineEdit.reviewing"
+        },
+        {
+          "command": "nighthawk.inlineEdit.reject",
+          "when": "nighthawk.inlineEdit.reviewing"
+        },
+        {
+          "command": "nighthawk.inlineEdit.acceptChange",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.inlineEdit.rejectChange",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.inlineEdit.cancel",
+          "when": "nighthawk.inlineEdit.generating"
+        },
+        {
+          "command": "nighthawk.inlineEdit.start",
+          "when": "editorIsOpen && !editorReadonly"
         }
       ],
       "view/title": [
@@ -599,6 +674,11 @@
       ],
       "editor/context": [
         {
+          "command": "nighthawk.inlineEdit.start",
+          "when": "!editorReadonly",
+          "group": "nighthawk@0"
+        },
+        {
           "command": "nighthawk.agent.addSelection",
           "group": "nighthawk@1"
         },
@@ -631,6 +711,29 @@
         "key": "ctrl+i",
         "mac": "cmd+i",
         "when": "terminalFocus"
+      },
+      {
+        "command": "nighthawk.inlineEdit.start",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.inlineEdit.accept",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && nighthawk.inlineEdit.reviewing"
+      },
+      {
+        "command": "nighthawk.inlineEdit.reject",
+        "key": "ctrl+backspace",
+        "mac": "cmd+backspace",
+        "when": "editorTextFocus && nighthawk.inlineEdit.reviewing"
+      },
+      {
+        "command": "nighthawk.inlineEdit.cancel",
+        "key": "escape",
+        "when": "editorTextFocus && nighthawk.inlineEdit.generating"
       }
     ],
     "terminalQuickFixes": [

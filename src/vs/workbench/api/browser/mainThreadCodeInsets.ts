@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getWindow } from '../../../base/browser/dom.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { DisposableStore, IDisposable } from '../../../base/common/lifecycle.js';
 import { isEqual } from '../../../base/common/resources.js';
 import { URI, UriComponents } from '../../../base/common/uri.js';
 import { IActiveCodeEditor, IViewZone } from '../../../editor/browser/editorBrowser.js';
@@ -24,6 +24,7 @@ class EditorWebviewZone implements IViewZone {
 	readonly heightInLines: number;
 
 	private _id?: string;
+	private readonly _layoutListener: IDisposable;
 	// suppressMouseDown?: boolean | undefined;
 	// heightInPx?: number | undefined;
 	// minWidthInPx?: number | undefined;
@@ -44,10 +45,17 @@ class EditorWebviewZone implements IViewZone {
 		this.heightInLines = height;
 
 		editor.changeViewZones(accessor => this._id = accessor.addZone(this));
+
+		// Nighthawk: as wide as the visible editor, not its longest line, so content laid out to the width stays in view.
+		// Set after adding the zone, which makes it 100% wide.
+		const fitWidth = () => this.domNode.style.width = `${editor.getLayoutInfo().contentWidth}px`;
+		fitWidth();
+		this._layoutListener = editor.onDidLayoutChange(fitWidth);
 		webview.mountTo(this.domNode, getWindow(editor.getDomNode()));
 	}
 
 	dispose(): void {
+		this._layoutListener.dispose();
 		this.editor.changeViewZones(accessor => this._id && accessor.removeZone(this._id));
 	}
 }
@@ -117,9 +125,10 @@ export class MainThreadEditorInsets implements MainThreadEditorInsetsShape {
 	}
 
 	$disposeEditorInset(handle: number): void {
-		const inset = this.getInset(handle);
+		// Nighthawk: the extension host disposes an inset again after the editor closed it; there is nothing left to do then.
+		const inset = this._insets.get(handle);
 		this._insets.delete(handle);
-		inset.dispose();
+		inset?.dispose();
 	}
 
 	$setHtml(handle: number, value: string): void {

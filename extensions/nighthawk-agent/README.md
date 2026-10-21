@@ -71,6 +71,17 @@ The agent reads these from the workspace (only in trusted workspaces) and from `
 
 Conversations are saved per workspace; open them from the history button. Hover a message and press the rewind button to go back to before it: the files the agent changed since then are restored. Long conversations are compacted automatically near the model's context limit.
 
+## Inline edit
+
+Select code and press `Ctrl+I` (`Cmd+I` on macOS), or pick **Edit Inline...** from the editor's context menu, then say what to change. A box opens above the code, and the new code streams straight into the file. When it is done, the lines it replaced show in red above the new ones, which are highlighted in green.
+
+- **Accept** (`Ctrl+Enter`) keeps the new code; **Reject** (`Ctrl+Backspace`) puts the old code back. When the model changed several places, each one has its own Accept and Reject above it.
+- Type a follow-up in the box, such as "also handle null", to have the model refine its answer.
+- With nothing selected, `Ctrl+I` writes new code at the cursor.
+- `Escape` stops the model while it writes; `Up` in the box brings back earlier requests.
+
+Inline edits use the agent's model unless **AI: Select Model for Inline Edits...** (`nighthawk.inlineEdit.model`) picks another; a fast model makes them feel instant. They are counted on the usage page like other AI requests.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
