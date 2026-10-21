@@ -138,7 +138,9 @@ export class UsageMeter implements vscode.Disposable {
 			await before();
 			for await (const event of stream(request, signal)) {
 				if (event.type === 'done') {
-					info.onCost?.(record(event.usage));
+					// Recorded first: an optional call skips its arguments when there is nothing to call.
+					const cost = record(event.usage);
+					info.onCost?.(cost);
 				}
 				yield event;
 			}

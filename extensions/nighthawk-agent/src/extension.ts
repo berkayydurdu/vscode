@@ -11,6 +11,7 @@ import { BackgroundAgents } from './host/background';
 import type { BackgroundTask } from './core/background';
 import { Endpoints, type QuickSetup } from './host/endpoints';
 import { chooseReviewTarget, generateCommitMessage } from './host/git';
+import { InlineEditController } from './host/inlineEdit';
 import { branchReviewPrompt } from './core/commit';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
@@ -44,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		controller.startNew();
 		await controller.session.sendTask(shown, prompt);
 	});
+	const inlineEdit = new InlineEditController(context, endpoints, usage);
 	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
@@ -58,7 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, background, terminal, diffs.disposable,
+		endpoints, mcp, view, status, usage, background, terminal, inlineEdit, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -129,6 +131,13 @@ export function activate(context: vscode.ExtensionContext): void {
 				: vscode.l10n.t('Review this branch against {0} before it is pushed.', target.base);
 			await controller.session.sendTask(shown, branchReviewPrompt(target.base, target.branch));
 		}),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.start', () => inlineEdit.start()),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.accept', (uri?: vscode.Uri) => inlineEdit.acceptAll(uri)),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.reject', (uri?: vscode.Uri) => inlineEdit.rejectAll(uri)),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.acceptChange', (uri: vscode.Uri, id: number) => inlineEdit.acceptHunk(uri, id)),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.rejectChange', (uri: vscode.Uri, id: number) => inlineEdit.rejectHunk(uri, id)),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.cancel', () => inlineEdit.cancel()),
+		vscode.commands.registerCommand('nighthawk.inlineEdit.selectModel', () => inlineEdit.pickModel()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
