@@ -69,7 +69,17 @@ The agent reads these from the workspace (only in trusted workspaces) and from `
 
 ## Conversations
 
-Conversations are saved per workspace; open them from the history button. Hover a message and press the rewind button to go back to before it: the files the agent changed since then are restored. Long conversations are compacted automatically near the model's context limit.
+Conversations are saved per workspace; open them from the history button. Long conversations are compacted automatically near the model's context limit.
+
+## Checkpoints
+
+Each time you send a message, the agent first saves a checkpoint of your files, so when a run of new features breaks things you can take the code back to how it was when it still worked.
+
+- A **Checkpoint 10:32** line sits above every message. Click it to see which files differ, then pick **Restore Code** (files only), **Restore Code and Conversation** (also removes that message and everything after it, and puts the message back in the input box), or **Conversation Only**.
+- **Agent: Restore Checkpoint...** lists every checkpoint of the workspace from all conversations, newest first ("30 minutes ago"), even after the conversation was cleared or compacted.
+- A restore is undoable: press **Undo Restore** in the conversation, or run **Agent: Undo Checkpoint Restore**.
+
+A checkpoint holds the whole folder as it was, your own edits included, not only what the agent changed. Files are compared with a separate Git store in Nighthawk's storage, so your project's commits, branches and staged changes are never touched. Files your `.gitignore` excludes, folders such as `node_modules` and new files over 25 MB are left out, and stay as they are on restore. Unsaved editors are saved before a restore so that Undo can bring them back. Checkpoints need Git; turn them off with `nighthawk.agent.checkpoints`.
 
 ## Inline edit
 

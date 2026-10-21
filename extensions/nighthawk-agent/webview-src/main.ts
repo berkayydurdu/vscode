@@ -122,7 +122,12 @@ class App {
 				if (this.state.running && !wasRunning) {
 					this.runStarted = Date.now();
 				}
-				this.renderChrome();
+				if (this.state.running !== wasRunning) {
+					// Message actions such as restoring a checkpoint only work while the agent is idle.
+					this.render();
+				} else {
+					this.renderChrome();
+				}
 				break;
 			}
 			case 'items':
@@ -322,11 +327,32 @@ class App {
 	}
 
 	private renderUser(item: Extract<TranscriptItem, { kind: 'user' }>): HTMLElement {
+		const bubble = this.renderUserBubble(item);
+		if (!item.checkpoint) {
+			return bubble;
+		}
+		const time = new Date(item.checkpoint.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		return h('div', { class: 'user-turn' },
+			h('div', { class: 'checkpoint' },
+				h('span', { class: 'checkpoint-line' }),
+				h('button', {
+					class: 'checkpoint-button',
+					disabled: this.state.running,
+					title: this.state.running
+						? t('Checkpoint from {0}. Stop the agent to restore it.', time)
+						: t('Take your files back to how they were at {0} ({1}), when you sent this message', time, timeAgo(item.checkpoint.at)),
+					onclick: () => post({ type: 'rewind', id: item.id }),
+				}, icon('history', 12), h('span', {}, t('Checkpoint {0}', time)), h('span', { class: 'checkpoint-restore' }, t('Restore'))),
+				h('span', { class: 'checkpoint-line' })),
+			bubble);
+	}
+
+	private renderUserBubble(item: Extract<TranscriptItem, { kind: 'user' }>): HTMLElement {
 		return h('div', { class: { user: true, queued: !!item.queued } },
 			h('div', { class: 'user-text' }, highlightMentions(item.text)),
 			h('div', { class: 'user-actions' },
 				item.queued && h('span', { class: 'badge' }, t('queued')),
-				item.canRewind && !this.state.running && h('button', {
+				!item.checkpoint && item.canRewind && !this.state.running && h('button', {
 					class: 'icon-button', title: t('Go back to before this message (restores files the agent changed)'), 'aria-label': t('Rewind'),
 					onclick: () => post({ type: 'rewind', id: item.id }),
 				}, icon('undo', 14)),

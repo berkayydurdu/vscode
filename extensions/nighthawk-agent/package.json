@@ -235,6 +235,11 @@
             "default": true,
             "description": "%config.agent.autoCompact%"
           },
+          "nighthawk.agent.checkpoints": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.agent.checkpoints%"
+          },
           "nighthawk.agent.maxSteps": {
             "type": "number",
             "default": 200,
@@ -417,6 +422,17 @@
         "title": "%command.history%",
         "category": "%category.agent%",
         "icon": "$(history)"
+      },
+      {
+        "command": "nighthawk.agent.restoreCheckpoint",
+        "title": "%command.restoreCheckpoint%",
+        "category": "%category.agent%",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "nighthawk.agent.undoRestore",
+        "title": "%command.undoRestore%",
+        "category": "%category.agent%"
       },
       {
         "command": "nighthawk.agent.addSelection",
@@ -629,6 +645,11 @@
           "command": "nighthawk.agent.history",
           "when": "view == nighthawk.agent.chat",
           "group": "navigation@2"
+        },
+        {
+          "command": "nighthawk.agent.restoreCheckpoint",
+          "when": "view == nighthawk.agent.chat",
+          "group": "checkpoints@1"
         },
         {
           "command": "nighthawk.agent.openInEditor",
