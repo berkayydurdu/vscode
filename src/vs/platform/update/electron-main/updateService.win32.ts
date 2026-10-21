@@ -206,6 +206,17 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		});
 	}
 
+	/**
+	 * Whether the installer runs in the background before the restart. That needs the versioned
+	 * install layout: the bundled inno_updater only swaps in versioned installs (`new_<exe>`), so
+	 * other user setups run the installer at restart instead.
+	 */
+	private get backgroundUpdatesEnabled(): boolean {
+		return !!this.configurationService.getValue('update.enableWindowsBackgroundUpdates')
+			&& this.productService.target === 'user'
+			&& !!this.productService.win32VersionedUpdate;
+	}
+
 	protected override getUpdatePlatform(): string {
 		let platform = `win32-${process.arch}`;
 
@@ -330,8 +341,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 						this.saveUpdateMetadata(update);
 						this.setState(State.Downloaded(update, explicit, this._overwrite));
 
-						const fastUpdatesEnabled = this.configurationService.getValue('update.enableWindowsBackgroundUpdates');
-						if (fastUpdatesEnabled && this.productService.target === 'user') {
+						if (this.backgroundUpdatesEnabled) {
 							this.doApplyUpdate();
 						} else {
 							this.setState(State.Ready(update, explicit, this._overwrite));
@@ -716,14 +726,13 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 			return;
 		}
 
-		const fastUpdatesEnabled = this.configurationService.getValue('update.enableWindowsBackgroundUpdates');
 		const update: IUpdate = await this.loadUpdateMetadata() ?? { version: commit ?? 'unknown', productVersion: 'unknown' };
 
 		this.setState(State.Downloading(update, true, false));
 		this.availableUpdate = { packagePath };
 		this.setState(State.Downloaded(update, true, false));
 
-		if (fastUpdatesEnabled && this.productService.target === 'user') {
+		if (this.backgroundUpdatesEnabled) {
 			this.doApplyUpdate();
 		} else {
 			this.setState(State.Ready(update, true, false));

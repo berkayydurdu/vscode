@@ -7,8 +7,8 @@
 // the GitHub API. It lowers the build number of an installed build so that the same build looks
 // like a newer release, then checks what the running app does with it:
 //
-// - win32 (user setup): the app downloads the installer, installs it in the background and,
-//   after "Restart to Update", the installer swaps the files and starts the app again.
+// - win32 (user setup): the app downloads and checks the installer and,
+//   after "Restart to Update", runs it silently, which starts the app again.
 // - linux (archive): the app offers the update with a link to the release page.
 //
 // Usage:
@@ -206,7 +206,7 @@ try {
 		await window.screenshot({ path: path.join(screenshotDir, 'update-linux-available.png') });
 		log('Linux: update offered');
 	} else {
-		await waitFor('the update to be installed in the background', () => {
+		await waitFor('the update to be downloaded and ready', () => {
 			const text = mainLog();
 			if (/update#setState idle[\s\S]*error/i.test(text) && !text.includes('update#setState downloading')) {
 				throw new Error(`Update check failed:\n${text}`);
