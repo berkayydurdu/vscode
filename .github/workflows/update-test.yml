@@ -1,0 +1,104 @@
+name: Update Test
+
+# End-to-end test of auto-update on Windows: builds the user installer, installs it, and lets the
+# installed app update itself from a local stand-in for GitHub Releases (build/update/updateTest.ts).
+# It takes as long as a Windows build, so it only runs when the update code changes. It uploads
+# screenshots, never binaries.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - src/vs/platform/update/**
+      - build/win32/code.iss
+      - build/update/**
+      - .github/workflows/update-test.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-update:
+    name: Windows update
+    if: github.repository != 'microsoft/vscode'
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      VSCODE_ARCH: x64
+      npm_config_arch: x64
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NIGHTHAWK_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+
+          # Patch Electron/v8 headers before native modules are built.
+          exec { node build/npm/preinstall.ts }
+
+          for ($i = 1; $i -le 3; $i++) {
+            try {
+              exec { npm ci }
+              break
+            }
+            catch {
+              if ($i -eq 3) {
+                Write-Error "npm ci failed too many times"
+                throw
+              }
+              Write-Host "npm ci failed $i, trying again..."
+            }
+          }
+        env:
+          npm_config_foreground_scripts: "true"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      # The packaging step calls signtool.exe, which ships with the Windows SDK
+      # on the runner but is not on PATH.
+      - name: Add signtool to PATH
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found in the Windows SDK" }
+          Write-Host "Using $($signtool.FullName)"
+          Add-Content $env:GITHUB_PATH $signtool.DirectoryName
+
+      - name: Build Windows x64 user installer
+        shell: pwsh
+        run: |
+          . build/azure-pipelines/win32/exec.ps1
+          $ErrorActionPreference = "Stop"
+          exec { npm run gulp vscode-win32-x64-min }
+          exec { npm run gulp vscode-win32-x64-inno-updater }
+          exec { npm run gulp vscode-win32-x64-user-setup }
+
+      - name: Update an installed build
+        run: node build/update/updateTest.ts win32 .build/win32-x64/user-setup/VSCodeSetup.exe update-screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: update-screenshots
+          path: update-screenshots
+          if-no-files-found: ignore
+          retention-days: 7

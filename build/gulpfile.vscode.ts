@@ -196,6 +196,11 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				json.commit = commit;
 				json.nlsMetadataHash = computeNLSMetadataHash(path.join(import.meta.dirname, '..', out), commit);
 				json.date = readISODate(out);
+				// The CI run number, which names the matching GitHub release (see .github/workflows/fork-build.yml).
+				const buildNumber = Number(process.env['NIGHTHAWK_BUILD_NUMBER']);
+				if (Number.isSafeInteger(buildNumber) && buildNumber > 0) {
+					json.buildNumber = buildNumber;
+				}
 				json.checksums = checksums;
 				json.version = version;
 				json.copilotVersions = {

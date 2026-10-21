@@ -7,6 +7,13 @@ import { IStringDictionary } from './collections.js';
 import { PlatformName } from './platform.js';
 import { IExtensionConfigurationPolicyReference, IPolicy } from './policy.js';
 
+export interface IProductReleaseUpdates {
+	/** GitHub API URL that lists the releases, e.g. `https://api.github.com/repos/<owner>/<repo>/releases`. */
+	readonly url: string;
+	/** Release asset to use per update platform (`win32-x64-user`, `win32-x64-archive`, `linux-x64`, ...). */
+	readonly assets: { readonly [platform: string]: string };
+}
+
 export interface IBuiltInExtension {
 	readonly name: string;
 	readonly version: string;
@@ -127,6 +134,10 @@ export interface IProductConfiguration {
 
 	readonly downloadUrl?: string;
 	readonly updateUrl?: string;
+	/** Updates from GitHub Releases instead of an update server (see `updateUrl`). */
+	readonly releaseUpdates?: IProductReleaseUpdates;
+	/** CI run number this build was made from, the `N` in release tags `v<version>-build.<N>`. */
+	readonly buildNumber?: number;
 	readonly webUrl?: string;
 	readonly webEndpointUrlTemplate?: string;
 	readonly webviewContentExternalBaseUrlTemplate?: string;

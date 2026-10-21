@@ -13,6 +13,7 @@ export interface IUpdate {
 	timestamp?: number;
 	url?: string;
 	sha256hash?: string;
+	buildNumber?: number; // CI build number, for updates from GitHub Releases
 }
 
 /**

@@ -167,7 +167,7 @@ suite('UpdateTitleBarVisibleContexts', () => {
 suite('UpdateTooltip', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
-	function createTooltip(): UpdateTooltip {
+	function createTooltip(product?: { releaseNotesUrl?: string; buildNumber?: number }): UpdateTooltip {
 		const configurationService = new TestConfigurationService({ 'update.mode': 'default' });
 		store.add(configurationService.onDidChangeConfigurationEmitter);
 		return store.add(new UpdateTooltip(
@@ -179,6 +179,8 @@ suite('UpdateTooltip', () => {
 				override readonly nameLong = 'Code - OSS Dev';
 				override readonly version = '1.134.0';
 				override readonly commit = 'current';
+				override readonly releaseNotesUrl = product ? product.releaseNotesUrl : 'https://example.com/notes';
+				override readonly buildNumber = product?.buildNumber;
 			},
 		));
 	}
@@ -199,6 +201,27 @@ suite('UpdateTooltip', () => {
 				{ className: 'copy-version-button', display: '', tabIndex: 0 },
 				{ className: 'release-notes-button', display: '', tabIndex: 0 },
 				{ className: 'action-button', display: 'none', tabIndex: -1 },
+			],
+		);
+	});
+
+	test('shows build numbers and hides release notes without a release notes URL', () => {
+		const tooltip = createTooltip({ buildNumber: 50 });
+
+		tooltip.renderState(State.AvailableForDownload({ version: 'f'.repeat(40), productVersion: '1.134.0', buildNumber: 52 }));
+
+		const text = tooltip.domNode.textContent ?? '';
+		assert.ok(text.includes('Current Version: 1.134.0 build 50'), text);
+		assert.ok(text.includes('Latest Version: 1.134.0 build 52'), text);
+		assert.deepStrictEqual(
+			Array.from(tooltip.domNode.querySelectorAll<HTMLElement>('.release-notes-button, .action-button, .button-bar')).map(element => ({
+				className: element.className,
+				display: element.style.display,
+			})),
+			[
+				{ className: 'button-bar', display: '' },
+				{ className: 'release-notes-button', display: 'none' },
+				{ className: 'action-button', display: '' },
 			],
 		);
 	});

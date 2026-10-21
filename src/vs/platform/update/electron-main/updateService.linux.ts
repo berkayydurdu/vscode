@@ -11,11 +11,11 @@ import { ILogService } from '../../log/common/log.js';
 import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 import { INativeHostMainService } from '../../native/electron-main/nativeHostMainService.js';
 import { IProductService } from '../../product/common/productService.js';
-import { asJson, IRequestService } from '../../request/common/request.js';
+import { IRequestService } from '../../request/common/request.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
-import { AvailableForDownload, IUpdate, State, StateType, UpdateType } from '../common/update.js';
-import { AbstractUpdateService, createUpdateURL, IUpdateURLOptions } from './abstractUpdateService.js';
+import { AvailableForDownload, State, StateType, UpdateType } from '../common/update.js';
+import { AbstractUpdateService, IUpdateURLOptions } from './abstractUpdateService.js';
 
 export class LinuxUpdateService extends AbstractUpdateService {
 
@@ -34,8 +34,12 @@ export class LinuxUpdateService extends AbstractUpdateService {
 		super(lifecycleMainService, configurationService, environmentMainService, requestService, logService, productService, telemetryService, applicationStorageMainService, meteredConnectionService, false);
 	}
 
-	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string {
-		return createUpdateURL(this.productService.updateUrl!, `linux-${process.arch}`, quality, commit, options);
+	protected override getUpdatePlatform(): string {
+		return `linux-${process.arch}`;
+	}
+
+	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string | undefined {
+		return this.createFeedUrl(quality, commit, options);
 	}
 
 	protected doCheckForUpdates(explicit: boolean, _pendingCommit?: string): void {
@@ -46,10 +50,14 @@ export class LinuxUpdateService extends AbstractUpdateService {
 		const internalOrg = this.getInternalOrg();
 		const background = !explicit && !internalOrg;
 		const url = this.buildUpdateFeedUrl(this.quality, this.productService.commit!, { background, internalOrg });
+
+		if (!url) {
+			return;
+		}
+
 		this.setState(State.CheckingForUpdates(explicit));
 
-		this.requestService.request({ url, callSite: 'updateService.linux.checkForUpdates' }, CancellationToken.None)
-			.then<IUpdate | null>(asJson)
+		this.requestUpdate(url, undefined, 'updateService.linux.checkForUpdates', CancellationToken.None)
 			.then(update => {
 				// If updates were disabled mid-check, ignore the result so we don't leave the Disabled state.
 				if (this.state.type !== StateType.CheckingForUpdates) {
