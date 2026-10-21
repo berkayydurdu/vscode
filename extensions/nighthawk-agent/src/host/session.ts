@@ -15,13 +15,15 @@ import { buildSystemPrompt, INIT_PROMPT, REVIEW_PROMPT } from '../core/prompt';
 import { guessContextWindow, modelStream } from '../core/providers';
 import { findShell, shellFromPath, type Shell } from '../core/shell';
 import { expandCommand, readSkillBody } from '../core/skills';
-import { bashDescription, BUILTIN_TOOLS, SessionState, skillDescription, taskDescription, type Tool, type ToolContext, type ToolResult } from '../core/tools';
+import type { SearchOptions } from '../core/indexing';
+import { bashDescription, BUILTIN_TOOLS, SessionState, skillDescription, taskDescription, type CodebaseSearchResult, type Tool, type ToolContext, type ToolResult } from '../core/tools';
 import type { Message, ModelStream, Usage } from '../core/types';
 import { timeAgo } from '../core/checkpoints';
-import { displayPath, resolvePath } from '../core/workspace';
+import { displayPath, isInside, resolvePath } from '../core/workspace';
 import { diagnosticsTool, EditorWorkspace } from './editorWorkspace';
 import type { Endpoints } from './endpoints';
 import type { Checkpoints, RestoreChoice } from './checkpoints';
+import type { CodebaseIndexer } from './codeIndex';
 import type { McpManager } from './mcpManager';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
@@ -33,6 +35,8 @@ export interface Services {
 	store: SessionStore;
 	usage: UsageMeter;
 	checkpoints: Checkpoints;
+	/** The codebase index, for the CodebaseSearch tool. */
+	codeIndex?: CodebaseIndexer;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -90,6 +94,12 @@ const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'Exit
 
 function newId(prefix: string): string {
 	return `${prefix}_${randomUUID().slice(0, 8)}`;
+}
+
+/** The same file in other folders, such as a worktree of the same repository. */
+function moveBetweenRoots(file: string, from: string[], to: string[]): string {
+	const i = from.findIndex(root => isInside(root, file));
+	return i < 0 ? file : path.join(to[i], path.relative(from[i], file));
 }
 
 function clip(text: string, max: number): string {
@@ -574,6 +584,9 @@ export class Session implements vscode.Disposable {
 			if (name === 'ExitPlanMode' && this.mode !== 'plan') {
 				continue;
 			}
+			if (name === 'CodebaseSearch' && !this.services.codeIndex?.enabled()) {
+				continue;
+			}
 			const description = name === 'Bash' ? bashDescription(this.shell, platform)
 				: name === 'Task' ? taskDescription(project.agents)
 					: name === 'Skill' ? skillDescription(project.skills)
@@ -582,6 +595,24 @@ export class Session implements vscode.Disposable {
 		}
 		tools.push(diagnosticsTool(), ...mcpTools);
 		return tools;
+	}
+
+	/**
+	 * Searches the workspace's index. A conversation working in other folders,
+	 * such as a background task's worktree, gets the same files in its own folders.
+	 */
+	private async searchCodebase(query: string, options: SearchOptions, signal: AbortSignal): Promise<CodebaseSearchResult> {
+		const index = this.services.codeIndex;
+		if (!index) {
+			return { results: [], byMeaning: false, note: 'The codebase index is turned off. Use Grep and Glob instead.' };
+		}
+		const indexed = locations().roots;
+		const own = this.workspace.roots;
+		if (!this.roots || indexed.length !== own.length) {
+			return index.search(query, options, signal);
+		}
+		const found = await index.search(query, { ...options, under: options.under && moveBetweenRoots(options.under, own, indexed) }, signal);
+		return { ...found, results: found.results.map(r => ({ ...r, file: moveBetweenRoots(r.file, indexed, own) })) };
 	}
 
 	private async run(): Promise<void> {
@@ -633,6 +664,7 @@ export class Session implements vscode.Disposable {
 					const skill = project.skills.find(s => s.name === name);
 					return skill ? { body: await readSkillBody(skill), dir: skill.dir } : undefined;
 				},
+				searchCodebase: (query, options, searchSignal) => this.searchCodebase(query, options, searchSignal),
 				runSubagent: (type, _description, prompt, callId, subSignal) => this.runSubagent({ type, prompt, callId, signal: subSignal, project, tools, hooks, promptContext, context }),
 			};
 			this.agent = new Agent({

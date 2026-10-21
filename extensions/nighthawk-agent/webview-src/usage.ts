@@ -45,6 +45,7 @@ function featureName(key: string): string {
 		case 'terminal': return t('Terminal assistant');
 		case 'inline': return t('Inline edits');
 		case 'autocomplete': return t('Autocomplete');
+		case 'index': return t('Codebase index');
 		default: return key;
 	}
 }

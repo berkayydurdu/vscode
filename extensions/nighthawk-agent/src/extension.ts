@@ -15,6 +15,7 @@ import { chooseReviewTarget, generateCommitMessage } from './host/git';
 import { InlineEditController } from './host/inlineEdit';
 import { branchReviewPrompt } from './core/commit';
 import { Checkpoints } from './host/checkpoints';
+import { CodebaseIndexer } from './host/codeIndex';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
 import { TerminalAssistant } from './host/terminal';
@@ -31,11 +32,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	const mcp = new McpManager(context);
 	const diffs = DiffContentProvider.register();
 	const usage = new UsageMeter(context, () => !!endpoints.current());
+	const codeIndex = new CodebaseIndexer(context, endpoints, usage, workspaceKey());
 	const host: ControllerHost = {
 		context,
 		endpoints,
 		mcp,
 		usage,
+		codeIndex,
 		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
@@ -64,7 +67,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, background, terminal, inlineEdit, autocomplete, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, background, terminal, inlineEdit, autocomplete, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -151,6 +154,10 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.autocomplete.menu', () => autocomplete.menu()),
 		vscode.commands.registerCommand('nighthawk.autocomplete.toggle', () => autocomplete.toggle()),
 		vscode.commands.registerCommand('nighthawk.autocomplete.selectModel', () => autocomplete.pickModel()),
+		vscode.commands.registerCommand('nighthawk.index.search', (query?: unknown) => codeIndex.searchCommand(typeof query === 'string' ? query : undefined)),
+		vscode.commands.registerCommand('nighthawk.index.menu', () => codeIndex.menu()),
+		vscode.commands.registerCommand('nighthawk.index.rebuild', () => codeIndex.rebuild()),
+		vscode.commands.registerCommand('nighthawk.index.selectEmbeddingModel', () => codeIndex.pickEmbeddingModel()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

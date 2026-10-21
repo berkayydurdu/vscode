@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process';
 import * as path from 'node:path';
 import { diffLines } from './diff';
 import { globToRegExp, SKIPPED_DIRS } from './glob';
+import { formatResults, type SearchOptions, type SearchResult } from './indexing';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
 import type { Question, Todo, ToolDisplay } from './protocol';
 import type { ToolSpec } from './types';
@@ -84,6 +85,15 @@ export interface ToolContext {
 	approvePlan?(plan: string): Promise<boolean>;
 	skills?(): SkillInfo[];
 	readSkill?(name: string): Promise<{ body: string; dir: string } | undefined>;
+	/** Searches the codebase index; absent when indexing is off. */
+	searchCodebase?(query: string, options: SearchOptions, signal: AbortSignal): Promise<CodebaseSearchResult>;
+}
+
+export interface CodebaseSearchResult {
+	results: SearchResult[];
+	byMeaning: boolean;
+	/** Said to the model along with the results, such as "the index is still being built". */
+	note?: string;
 }
 
 export interface Tool {
@@ -663,6 +673,54 @@ async function jsGrep(ctx: ToolContext, pattern: string, target: string, mode: s
 	return out;
 }
 
+// --- CodebaseSearch
+
+const codebaseSearchTool: Tool = {
+	kind: 'read',
+	parallel: true,
+	spec: {
+		name: 'CodebaseSearch',
+		description: [
+			'Finds the code most relevant to a question across the whole project, using the codebase index: by meaning when an embedding model is set up, and by words and identifiers always.',
+			'Use it first when you do not know where something lives or what it is called ("where do we handle sign-in?", "how are API keys stored?"). Use Grep for exact text or a known name, and Read to see a result in full.',
+			'Put likely identifiers and synonyms in keywords (e.g. ["login", "signIn", "authenticate", "session"]): matching names in the code ranks results much better.',
+			'Returns code chunks with file paths and line numbers, most relevant first.',
+		].join('\n'),
+		inputSchema: {
+			type: 'object',
+			properties: {
+				query: { type: 'string', description: 'What you are looking for, as a question or description.' },
+				keywords: { type: 'array', items: { type: 'string' }, description: 'Likely identifiers, file names and synonyms to match.' },
+				path: { type: 'string', description: 'Only search under this folder.' },
+				limit: { type: 'number', description: 'How many results to return (default 10, at most 30).' },
+			},
+			required: ['query'],
+			additionalProperties: false,
+		},
+	},
+	title: input => `Search codebase for ${JSON.stringify(str(input, 'query', false))}`,
+	paths: (input, ws) => [resolvePath(ws, str(input, 'path', false) || '.')],
+	async run(input, ctx) {
+		if (!ctx.searchCodebase) {
+			throw new ToolError('The codebase index is turned off. Use Grep and Glob instead.');
+		}
+		const query = str(input, 'query');
+		const keywords = Array.isArray(input.keywords) ? input.keywords.map(String).filter(Boolean).slice(0, 30) : typeof input.keywords === 'string' ? input.keywords.split(/[,\s]+/).filter(Boolean) : [];
+		const under = str(input, 'path', false) ? resolvePath(ctx.workspace, str(input, 'path')) : undefined;
+		const found = await ctx.searchCodebase(query, { keywords, under, limit: Math.min(num(input, 'limit') ?? 10, 30) }, ctx.signal);
+		const note = found.note ? `${found.note}\n\n` : '';
+		if (!found.results.length) {
+			return { content: `${note}No matching code found. Try other keywords, or Grep for exact text.`, summary: '0 results' };
+		}
+		const how = found.byMeaning ? 'by meaning and words' : 'by words (no embedding model is set up)';
+		return {
+			content: `${note}${found.results.length} ${found.results.length === 1 ? 'result' : 'results'}, ranked ${how}:\n\n${formatResults(found.results, file => displayPath(ctx.workspace, file))}`,
+			display: { kind: 'files', files: found.results.map(r => `${displayPath(ctx.workspace, r.file)}:${r.start}-${r.end}`) },
+			summary: `${found.results.length} results`,
+		};
+	},
+};
+
 // --- Bash
 
 const bashTool: Tool = {
@@ -1099,13 +1157,13 @@ const exitPlanTool: Tool = {
 };
 
 export const BUILTIN_TOOLS: Tool[] = [
-	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool,
+	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool,
 	bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 
 /** Tools a read-only sub-agent may use. */
-export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'WebFetch', 'BashOutput', 'Skill']);
+export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'WebFetch', 'BashOutput', 'Skill']);
 
 export function isOutsideWorkspace(tool: Tool, input: Record<string, unknown>, workspace: Workspace): boolean {
 	try {

@@ -247,14 +247,14 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
 	{
 		name: 'Explore',
 		description: 'Fast, read-only codebase exploration: finds files, searches code and answers questions about how things work. Say how thorough to be.',
-		tools: ['Read', 'LS', 'Glob', 'Grep', 'Bash'],
-		prompt: 'You are a read-only exploration sub-agent. Find what the task asks for using Glob, Grep, Read and read-only commands, searching in parallel where you can. Never change files. Reply with a concise answer that cites file paths and line numbers.',
+		tools: ['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'Bash'],
+		prompt: 'You are a read-only exploration sub-agent. Find what the task asks for using CodebaseSearch, Glob, Grep, Read and read-only commands, searching in parallel where you can. Never change files. Reply with a concise answer that cites file paths and line numbers.',
 		scope: 'builtin',
 	},
 	{
 		name: 'Plan',
 		description: 'Designs an implementation plan for a task: reads the relevant code and returns step-by-step changes with the files involved. Read only.',
-		tools: ['Read', 'LS', 'Glob', 'Grep', 'Bash', 'WebFetch'],
+		tools: ['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'Bash', 'WebFetch'],
 		prompt: 'You are a software architect sub-agent. Read the relevant code, then return a concrete implementation plan: the steps, the files and functions to change, and the trade-offs. Never change files.',
 		scope: 'builtin',
 	},
