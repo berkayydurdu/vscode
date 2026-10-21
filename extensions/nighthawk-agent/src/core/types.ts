@@ -60,6 +60,8 @@ export interface ChatRequest {
 	maxTokens?: number;
 	/** Reasoning effort for models that support it. */
 	effort?: string;
+	/** Text that ends the reply early; not sent to reasoning models, which reject it. */
+	stop?: string[];
 }
 
 export type StreamEvent =

@@ -79,5 +79,13 @@
 	"command.inlineEdit.cancel": "Stop Inline Edit",
 	"command.inlineEdit.selectModel": "Select Model for Inline Edits...",
 	"config.inlineEdit.title": "Inline Edit",
-	"config.inlineEdit.model": "The model for inline edits (`Ctrl+I` in the editor), as `Endpoint name/model id`. Leave empty to use the agent's model. A fast model makes edits feel instant."
+	"config.inlineEdit.model": "The model for inline edits (`Ctrl+I` in the editor), as `Endpoint name/model id`. Leave empty to use the agent's model. A fast model makes edits feel instant.",
+	"command.autocomplete.menu": "Autocomplete Options...",
+	"command.autocomplete.toggle": "Turn Autocomplete On or Off",
+	"command.autocomplete.selectModel": "Select Model for Autocomplete...",
+	"config.autocomplete.title": "Autocomplete",
+	"config.autocomplete.enabled": "Show AI suggestions as grey text while typing. `Tab` accepts a suggestion, `Ctrl+Right` accepts its next word, `Escape` hides it and `Alt+\\` asks for one.",
+	"config.autocomplete.model": "The model for autocomplete, as `Endpoint name/model id`. Leave empty to use the inline edit model (which falls back to the agent's). Pick a small, fast model: suggestions should appear within a second, and every pause in typing sends a request.",
+	"config.autocomplete.delay": "How long typing must pause, in milliseconds, before a suggestion is requested. Longer waits send fewer requests.",
+	"config.autocomplete.disabledLanguages": "Languages without autocomplete, by language id (for example `markdown`). Files that usually hold secrets, such as `.env` and key files, never get suggestions."
 }

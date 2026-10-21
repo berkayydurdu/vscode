@@ -70,6 +70,9 @@ export function anthropicBody(endpoint: Endpoint, model: string, request: ChatRe
 		system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
 		messages: toAnthropicMessages(request.messages),
 	};
+	if (request.stop?.length) {
+		body.stop_sequences = request.stop;
+	}
 	if (request.tools.length) {
 		body.tools = request.tools.map(tool => ({
 			name: tool.name,

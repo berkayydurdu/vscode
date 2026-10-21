@@ -277,6 +277,41 @@
             "markdownDescription": "%config.inlineEdit.model%"
           }
         }
+      },
+      {
+        "title": "%config.autocomplete.title%",
+        "properties": {
+          "nighthawk.autocomplete.enabled": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.autocomplete.enabled%"
+          },
+          "nighthawk.autocomplete.model": {
+            "type": "string",
+            "scope": "application",
+            "default": "",
+            "markdownDescription": "%config.autocomplete.model%"
+          },
+          "nighthawk.autocomplete.delay": {
+            "type": "number",
+            "default": 300,
+            "minimum": 0,
+            "maximum": 5000,
+            "markdownDescription": "%config.autocomplete.delay%"
+          },
+          "nighthawk.autocomplete.disabledLanguages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "plaintext",
+              "markdown",
+              "scminput"
+            ],
+            "markdownDescription": "%config.autocomplete.disabledLanguages%"
+          }
+        }
       }
     ],
     "viewsContainers": {
@@ -501,6 +536,21 @@
       {
         "command": "nighthawk.inlineEdit.selectModel",
         "title": "%command.inlineEdit.selectModel%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.autocomplete.menu",
+        "title": "%command.autocomplete.menu%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.autocomplete.toggle",
+        "title": "%command.autocomplete.toggle%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.autocomplete.selectModel",
+        "title": "%command.autocomplete.selectModel%",
         "category": "%category.ai%"
       }
     ],
@@ -734,6 +784,11 @@
         "command": "nighthawk.inlineEdit.cancel",
         "key": "escape",
         "when": "editorTextFocus && nighthawk.inlineEdit.generating"
+      },
+      {
+        "command": "editor.action.inlineSuggest.trigger",
+        "key": "alt+\\",
+        "when": "editorTextFocus && !editorReadonly"
       }
     ],
     "terminalQuickFixes": [

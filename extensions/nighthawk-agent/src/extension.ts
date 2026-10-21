@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
+import { Autocomplete } from './host/autocomplete';
 import { BackgroundAgents } from './host/background';
 import type { BackgroundTask } from './core/background';
 import { Endpoints, type QuickSetup } from './host/endpoints';
@@ -46,6 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		await controller.session.sendTask(shown, prompt);
 	});
 	const inlineEdit = new InlineEditController(context, endpoints, usage);
+	const autocomplete = new Autocomplete(endpoints, usage, () => inlineEdit.model());
 	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
@@ -60,7 +62,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, background, terminal, inlineEdit, diffs.disposable,
+		endpoints, mcp, view, status, usage, background, terminal, inlineEdit, autocomplete, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -138,6 +140,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.inlineEdit.rejectChange', (uri: vscode.Uri, id: number) => inlineEdit.rejectHunk(uri, id)),
 		vscode.commands.registerCommand('nighthawk.inlineEdit.cancel', () => inlineEdit.cancel()),
 		vscode.commands.registerCommand('nighthawk.inlineEdit.selectModel', () => inlineEdit.pickModel()),
+		vscode.commands.registerCommand('nighthawk.autocomplete.menu', () => autocomplete.menu()),
+		vscode.commands.registerCommand('nighthawk.autocomplete.toggle', () => autocomplete.toggle()),
+		vscode.commands.registerCommand('nighthawk.autocomplete.selectModel', () => autocomplete.pickModel()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

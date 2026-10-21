@@ -44,6 +44,7 @@ function featureName(key: string): string {
 		case 'commit': return t('Commit messages');
 		case 'terminal': return t('Terminal assistant');
 		case 'inline': return t('Inline edits');
+		case 'autocomplete': return t('Autocomplete');
 		default: return key;
 	}
 }

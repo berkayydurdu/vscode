@@ -82,6 +82,16 @@ Select code and press `Ctrl+I` (`Cmd+I` on macOS), or pick **Edit Inline...** fr
 
 Inline edits use the agent's model unless **AI: Select Model for Inline Edits...** (`nighthawk.inlineEdit.model`) picks another; a fast model makes them feel instant. They are counted on the usage page like other AI requests.
 
+## Autocomplete
+
+While you type, the model suggests what comes next as grey text: the rest of a line, or a whole block on an empty line or after `{`. `Tab` accepts it, `Ctrl+Right` (`Cmd+Right` on macOS) accepts one word, `Escape` hides it and `Alt+\` asks for one right away. When the suggestion list is open, the grey text goes on from the selected item: the first `Tab` takes the item, the second the rest.
+
+- A request goes out once typing pauses for 300 ms (`nighthawk.autocomplete.delay`). Typing the start of a suggestion keeps showing the rest without asking again.
+- The **Autocomplete** item in the status bar shows when a suggestion is on its way or the last one failed. Click it to turn autocomplete off, everywhere or for the current language, or to change its model.
+- It is off for plain text, Markdown and the commit message box by default (`nighthawk.autocomplete.disabledLanguages`). Files that usually hold secrets, such as `.env` and key files, are never sent.
+
+Autocomplete uses its own model when **AI: Select Model for Autocomplete...** (`nighthawk.autocomplete.model`) sets one, else the inline edit model, else the agent's. Every pause in typing can send a request, so pick a small, fast model; a local model through Ollama or LM Studio costs nothing. Requests are counted on the usage page under Autocomplete.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
