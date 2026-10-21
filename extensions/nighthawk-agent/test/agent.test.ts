@@ -138,6 +138,16 @@ describe('permissions', () => {
 		assert.equal(decide({ ...base, tool: tool('Bash'), input: { command: 'rm -rf /' }, mode: 'bypassPermissions' }).behavior, 'allow');
 	});
 
+	it('lets a spec being written change only its folder', () => {
+		const onlyEditInside = path.join(dir, '.nighthawk', 'specs', 'export');
+		const check = (t: Tool, input: Record<string, unknown>) => decide({ ...base, tool: t, input, mode: 'bypassPermissions', onlyEditInside }).behavior;
+		assert.equal(check(tool('Write'), { file_path: '.nighthawk/specs/export/requirements.md' }), 'allow');
+		assert.equal(check(tool('Write'), { file_path: 'src/export.ts' }), 'deny');
+		assert.equal(check(tool('Bash'), { command: 'npm install' }), 'deny');
+		assert.equal(check(tool('Bash'), { command: 'git log' }), 'allow');
+		assert.equal(check(tool('Read'), { file_path: 'src/export.ts' }), 'allow');
+	});
+
 	it('applies allow and deny rules', () => {
 		const allow = [parseRule('Bash(npm test:*)')!, parseRule('Edit(src/**)')!];
 		const deny = [parseRule('Bash(git push:*)')!];

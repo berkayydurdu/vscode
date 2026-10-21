@@ -7,9 +7,11 @@ import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { AcpClient, AcpError, contentText, externalAgents, pickOption, type AcpContent, type AcpMode, type AcpPermissionOption, type AcpToolCall, type AcpUpdate } from '../core/acp';
 import { Agent, type AgentEvent, type PermissionAnswer } from '../core/agent';
+import { diffLines } from '../core/diff';
 import { Hooks } from '../core/hooks';
-import { decide, parseRule, suggestRule, type PermissionMode, type Rule } from '../core/permissions';
+import { decide, isSafeCommand, parseRule, PERMISSION_MODES, suggestRule, type PermissionMode, type Rule } from '../core/permissions';
 import type { HostMessage, Question, SlashCommandInfo, Todo, ToolDisplay, TranscriptItem, ViewState } from '../core/protocol';
 import { buildSystemPrompt, INIT_PROMPT, REVIEW_PROMPT } from '../core/prompt';
 import { guessContextWindow, modelStream } from '../core/providers';
@@ -25,6 +27,7 @@ import type { Endpoints } from './endpoints';
 import type { Checkpoints, RestoreChoice } from './checkpoints';
 import type { CodebaseIndexer } from './codeIndex';
 import type { McpManager } from './mcpManager';
+import type { Memories } from './memories';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
 
@@ -37,6 +40,8 @@ export interface Services {
 	checkpoints: Checkpoints;
 	/** The codebase index, for the CodebaseSearch tool. */
 	codeIndex?: CodebaseIndexer;
+	/** The agent's saved memories. */
+	memories?: Memories;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -57,11 +62,29 @@ export interface SessionData {
 	roots?: string[];
 	/** Where each user message starts in `messages` and `items`, so the conversation can go back to it. */
 	turns?: Omit<Turn, 'files'>[];
+	/** While a spec is written: the only folder the agent may change. */
+	specFolder?: string;
+	/** Set when an external agent, such as Claude Code, runs this conversation. */
+	external?: ExternalLink;
+}
+
+export interface ExternalLink {
+	/** The agent's name in the presets or the nighthawk.agent.externalAgents setting. */
+	agent: string;
+	/** The agent's own id for the conversation, to reopen it. */
+	sessionId?: string;
+}
+
+export interface TaskOptions {
+	/** Limits changes to this folder, as while a spec is written; undefined lifts the limit. */
+	specFolder?: string;
 }
 
 export interface SessionOptions {
 	roots?: string[];
 	mode?: PermissionMode;
+	/** The external agent that runs the conversation. */
+	external?: string;
 }
 
 /** What a user message changed, so it can be rewound. */
@@ -81,7 +104,9 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
 	{ name: 'review', description: 'Review the uncommitted changes' },
 	{ name: 'model', description: 'Switch the model' },
 	{ name: 'plan', description: 'Switch to plan mode: research and propose before editing' },
+	{ name: 'spec', description: 'Write requirements, a design and tasks for you to approve, then build it task by task', hint: '<what to build>' },
 	{ name: 'memory', description: 'Open the project\'s AGENTS.md instructions' },
+	{ name: 'memories', description: 'Show, edit or forget what the agent remembers' },
 	{ name: 'skills', description: 'List the available skills' },
 	{ name: 'agents', description: 'List the sub-agents' },
 	{ name: 'mcp', description: 'Show MCP servers and restart them' },
@@ -89,8 +114,41 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
 	{ name: 'help', description: 'Show what the agent can do' },
 ];
 
+/** Nighthawk's own commands that also work with an external agent; the agent adds its own. */
+const EXTERNAL_COMMANDS = new Set(['clear', 'model', 'plan', 'spec', 'memories', 'help']);
+
+/** A tool card name for an external agent's tool kind, so cards and approvals read like the agent's own. */
+function toolName(kind: AcpToolCall['kind']): string {
+	switch (kind) {
+		case 'read': return 'Read';
+		case 'edit': return 'Edit';
+		case 'delete': return 'Delete';
+		case 'move': return 'Move';
+		case 'search': return 'Grep';
+		case 'execute': return 'Bash';
+		case 'fetch': return 'WebFetch';
+		case 'think': return 'Think';
+		default: return 'Tool';
+	}
+}
+
+/** The external agent's mode that matches a Nighthawk permission mode, if it has one. */
+function agentMode(modes: AcpMode[], mode: PermissionMode): string | undefined {
+	const exact = modes.find(m => m.id === mode);
+	if (exact) {
+		return exact.id;
+	}
+	const patterns: Record<PermissionMode, RegExp> = {
+		default: /^(default|ask|normal|manual)$/i,
+		acceptEdits: /accept|auto.?edit/i,
+		plan: /plan/i,
+		bypassPermissions: /(bypass|yolo|full)|^auto$/i,
+	};
+	return modes.find(m => patterns[mode].test(m.id) || patterns[mode].test(m.name))?.id;
+}
+
 /** Tools a sub-agent never gets: they talk to the user or would nest agents. */
-const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode']);
+const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'Memory']);
 
 function newId(prefix: string): string {
 	return `${prefix}_${randomUUID().slice(0, 8)}`;
@@ -143,6 +201,17 @@ export class Session implements vscode.Disposable {
 	private abort: AbortController | undefined;
 	private readonly waiting = new Map<string, (value: unknown) => void>();
 	private readonly allowRules: Rule[] = [];
+	private specFolder: string | undefined;
+	/** The external agent running this conversation, if any, and its process once started. */
+	readonly external: ExternalLink | undefined;
+	private acp: AcpClient | undefined;
+	/** True while the external agent replays a reopened conversation, which the transcript already shows. */
+	private replaying = false;
+	private externalReply = '';
+	/** Which tool call shows each of the external agent's terminals. */
+	private readonly terminalItems = new Map<string, string>();
+	/** What each of the external agent's terminals printed, for the card that shows it. */
+	private readonly terminalOutput = new Map<string, string>();
 	private readonly diffs = new Map<string, { path: string; before: string; after: string }>();
 	private usage: Usage | undefined;
 	private contextWindow = 200_000;
@@ -170,6 +239,8 @@ export class Session implements vscode.Disposable {
 		this.todos = data?.todos ?? [];
 		this.cost = data?.cost ?? 0;
 		this.started = !!data?.messages.length;
+		this.specFolder = data?.specFolder;
+		this.external = data?.external ?? (options?.external ? { agent: options.external } : undefined);
 		this.turns = (data?.turns ?? []).map(turn => ({ ...turn, files: new Map() }));
 		const rewindable = new Set(this.turns.map(t => t.itemId));
 		// A restored conversation cannot resume calls that were waiting.
@@ -194,6 +265,7 @@ export class Session implements vscode.Disposable {
 
 	dispose(): void {
 		this.stop();
+		this.acp?.dispose();
 		this.state.dispose();
 		this.emitter.dispose();
 		this.finished.dispose();
@@ -221,8 +293,8 @@ export class Session implements vscode.Disposable {
 		const choice = this.services.endpoints.current();
 		const tokens = this.usage ? this.usage.inputTokens + this.usage.outputTokens : undefined;
 		return {
-			configured: !!choice,
-			model: choice?.model,
+			configured: !!choice || !!this.external,
+			model: this.external?.agent ?? choice?.model,
 			mode: this.mode,
 			running: this.running,
 			context: tokens !== undefined ? Math.min(1, tokens / this.contextWindow) : undefined,
@@ -314,9 +386,12 @@ export class Session implements vscode.Disposable {
 	}
 
 	/** Runs a prompt written by a command, showing `shown` in the transcript instead of the full prompt. */
-	async sendTask(shown: string, prompt: string): Promise<void> {
+	async sendTask(shown: string, prompt: string, options?: TaskOptions): Promise<void> {
 		if (this.running) {
 			this.stop();
+		}
+		if (options) {
+			this.specFolder = options.specFolder;
 		}
 		await this.startTurn(shown, prompt);
 	}
@@ -420,6 +495,9 @@ export class Session implements vscode.Disposable {
 			case 'review':
 				return void this.startTurn('/review', args ? `${REVIEW_PROMPT}\n\nFocus: ${args}` : REVIEW_PROMPT);
 			case 'model':
+				if (this.external) {
+					return this.notice('info', vscode.l10n.t('{0} picks its own model. Start a new conversation to use a different agent or model.', this.external.agent));
+				}
 				await this.services.endpoints.pickModel();
 				return this.postState();
 			case 'plan':
@@ -428,8 +506,12 @@ export class Session implements vscode.Disposable {
 					await this.startTurn(text, args);
 				}
 				return;
+			case 'spec':
+				return void vscode.commands.executeCommand('nighthawk.spec.new', args.trim() || undefined);
 			case 'memory':
 				return void this.openMemory();
+			case 'memories':
+				return void this.services.memories?.manage();
 			case 'skills': {
 				await this.refreshCommands();
 				const skills = this.project?.skills ?? [];
@@ -512,6 +594,10 @@ export class Session implements vscode.Disposable {
 	setMode(mode: PermissionMode): void {
 		this.mode = mode;
 		this.postState();
+		const modeId = this.acp?.session?.modes && agentMode(this.acp.session.modes.availableModes, mode);
+		if (modeId && modeId !== this.acp?.session?.modes?.currentModeId) {
+			this.acp?.setMode(modeId).catch(err => this.notice('warning', vscode.l10n.t('{0} did not switch modes: {1}', this.external?.agent ?? '', String(err?.message ?? err))));
+		}
 	}
 
 	stop(): void {
@@ -587,6 +673,9 @@ export class Session implements vscode.Disposable {
 			if (name === 'CodebaseSearch' && !this.services.codeIndex?.enabled()) {
 				continue;
 			}
+			if (name === 'Memory' && !this.services.memories?.enabled()) {
+				continue;
+			}
 			const description = name === 'Bash' ? bashDescription(this.shell, platform)
 				: name === 'Task' ? taskDescription(project.agents)
 					: name === 'Skill' ? skillDescription(project.skills)
@@ -616,6 +705,9 @@ export class Session implements vscode.Disposable {
 	}
 
 	private async run(): Promise<void> {
+		if (this.external) {
+			return this.runExternal(this.external);
+		}
 		const model = await this.model();
 		if (!model) {
 			this.notice('warning', vscode.l10n.t('Connect a model to start: an Anthropic or OpenAI key, OpenRouter, a local Ollama or LM Studio, or any OpenAI-compatible endpoint.'), [{ label: vscode.l10n.t('Add Model Endpoint'), action: 'addEndpoint' }]);
@@ -644,9 +736,11 @@ export class Session implements vscode.Disposable {
 				mode: this.mode,
 				isGitRepo: !!this.workspace.roots[0] && await exists(path.join(this.workspace.roots[0], '.git')),
 				custom: vscode.workspace.getConfiguration('nighthawk.agent').get<string>('systemPrompt'),
+				memories: this.services.memories?.enabled() ? await this.services.memories.list() : undefined,
 			};
 			this.contextWindow = model.contextWindow;
 			const config = vscode.workspace.getConfiguration('nighthawk.agent');
+			const memories = this.services.memories?.enabled() ? this.services.memories : undefined;
 			const context: Omit<ToolContext, 'signal' | 'progress'> = {
 				workspace: this.workspace,
 				state: this.state,
@@ -665,6 +759,7 @@ export class Session implements vscode.Disposable {
 					return skill ? { body: await readSkillBody(skill), dir: skill.dir } : undefined;
 				},
 				searchCodebase: (query, options, searchSignal) => this.searchCodebase(query, options, searchSignal),
+				memory: memories && (change => memories.apply(change, this.title || undefined)),
 				runSubagent: (type, _description, prompt, callId, subSignal) => this.runSubagent({ type, prompt, callId, signal: subSignal, project, tools, hooks, promptContext, context }),
 			};
 			this.agent = new Agent({
@@ -792,6 +887,327 @@ export class Session implements vscode.Disposable {
 		}
 	}
 
+	// --- external agents (Agent Client Protocol)
+
+	/** Runs the last user message with the external agent instead of Nighthawk's own. */
+	private async runExternal(external: ExternalLink): Promise<void> {
+		this.lastError = undefined;
+		this.abort = new AbortController();
+		const signal = this.abort.signal;
+		this.externalReply = '';
+		this.postState();
+		try {
+			const client = await this.externalClient(external);
+			const last = this.messages.at(-1);
+			const prompt: AcpContent[] = last?.role === 'user' ? last.content.flatMap(p => p.type === 'text' ? [{ type: 'text', text: p.text }] : []) : [];
+			const stop = await client.prompt(prompt, signal);
+			if (stop === 'cancelled' || signal.aborted) {
+				this.notice('info', vscode.l10n.t('Stopped. Tell the agent what to do instead.'));
+			} else if (stop === 'refusal') {
+				this.notice('warning', vscode.l10n.t('{0} declined to continue.', external.agent));
+			} else if (stop === 'max_tokens' || stop === 'max_turn_requests') {
+				this.notice('warning', vscode.l10n.t('{0} stopped at its limit for one turn. Say "continue" to go on.', external.agent));
+			}
+		} catch (err) {
+			if (!signal.aborted) {
+				const message = String(err?.message ?? err);
+				this.lastError = message;
+				const actions = [{ label: vscode.l10n.t('Retry'), action: 'retry' }];
+				if (err instanceof AcpError && err.authRequired) {
+					actions.unshift({ label: vscode.l10n.t('Sign In'), action: 'acp:signIn' });
+				}
+				this.notice('error', message, actions);
+			}
+		} finally {
+			this.closeOpenBlocks();
+			if (this.externalReply.trim()) {
+				this.messages.push({ role: 'assistant', content: [{ type: 'text', text: this.externalReply }] });
+			}
+			this.abort = undefined;
+			const leftover = this.takeQueued();
+			this.postState();
+			await this.save();
+			if (leftover.length && !signal.aborted) {
+				this.messages.push({ role: 'user', content: [{ type: 'text', text: leftover.join('\n\n') }] });
+				await this.runExternal(external);
+			} else {
+				this.finished.fire();
+			}
+		}
+	}
+
+	/** The external agent's process with this conversation open, started the first time. */
+	private async externalClient(external: ExternalLink): Promise<AcpClient> {
+		if (this.acp?.running && this.acp.session) {
+			return this.acp;
+		}
+		const agent = externalAgents(vscode.workspace.getConfiguration('nighthawk.agent').get('externalAgents')).find(a => a.name === external.agent);
+		if (!agent) {
+			throw new Error(vscode.l10n.t('The external agent "{0}" is not set up any more. Add it back in the nighthawk.agent.externalAgents setting.', external.agent));
+		}
+		this.acp?.dispose();
+		const client = this.acp = new AcpClient(agent, {
+			onUpdate: update => this.onExternalUpdate(update),
+			requestPermission: (toolCall, options) => this.externalPermission(toolCall, options),
+			readTextFile: (file, line, limit) => this.externalRead(file, line, limit),
+			writeTextFile: (file, content) => this.externalWrite(file, content),
+			onTerminalOutput: (terminalId, text) => {
+				this.terminalOutput.set(terminalId, clip((this.terminalOutput.get(terminalId) ?? '') + text, 20_000));
+				const itemId = this.terminalItems.get(terminalId);
+				if (itemId) {
+					this.append(itemId, 'output', text);
+				}
+			},
+		});
+		const cwd = this.workspace.roots[0] ?? process.cwd();
+		const starting = newId('n');
+		this.upsert({ kind: 'notice', id: starting, level: 'info', text: vscode.l10n.t('Starting {0}...', agent.name) });
+		try {
+			const init = await client.start(cwd);
+			if (external.sessionId && init.agentCapabilities?.loadSession) {
+				this.replaying = true;
+				try {
+					await client.loadSession(external.sessionId, cwd);
+				} catch {
+					external.sessionId = undefined;
+				} finally {
+					this.replaying = false;
+				}
+			}
+			if (!client.session) {
+				const reopened = !!external.sessionId;
+				await this.openExternalSession(client, cwd);
+				if (reopened) {
+					this.notice('info', vscode.l10n.t('{0} cannot reopen earlier conversations, so it starts this one without what was said before.', agent.name));
+				}
+			}
+			external.sessionId = client.session?.sessionId;
+			const modes = client.session?.modes;
+			const wanted = modes && agentMode(modes.availableModes, this.mode);
+			if (modes && wanted && wanted !== modes.currentModeId) {
+				await client.setMode(wanted).catch(() => undefined);
+			}
+		} finally {
+			this.items = this.items.filter(i => i.id !== starting);
+			this.emitter.fire({ type: 'items', items: this.items });
+		}
+		return client;
+	}
+
+	/** Opens a conversation, signing in first when the agent asks for it and has a way to. */
+	private async openExternalSession(client: AcpClient, cwd: string): Promise<void> {
+		try {
+			await client.newSession(cwd, this.workspace.roots.slice(1));
+		} catch (err) {
+			if (!(err instanceof AcpError && err.authRequired) || !await this.externalSignIn(client)) {
+				throw err;
+			}
+			await client.newSession(cwd, this.workspace.roots.slice(1));
+		}
+	}
+
+	/** Lets the user pick one of the agent's sign-in methods. True when the agent signed in. */
+	private async externalSignIn(client: AcpClient): Promise<boolean> {
+		const methods = client.initialized?.authMethods ?? [];
+		if (!methods.length) {
+			return false;
+		}
+		const pick = methods.length === 1 ? methods[0] : await vscode.window.showQuickPick(methods.map(m => ({ label: m.name, detail: m.description ?? undefined, method: m })), {
+			title: vscode.l10n.t('Sign In to {0}', client.agent.name),
+			ignoreFocusOut: true,
+		}).then(p => p?.method);
+		if (!pick) {
+			return false;
+		}
+		if (pick.type === 'terminal') {
+			// The agent signs in interactively in a terminal of its own.
+			const terminal = vscode.window.createTerminal({ name: vscode.l10n.t('Sign in to {0}', client.agent.name), shellPath: client.agent.command, shellArgs: [...client.agent.args ?? [], ...((pick as { args?: string[] }).args ?? [])], env: { ...client.agent.env, ...(pick as { env?: Record<string, string> }).env } });
+			terminal.show();
+			this.notice('info', vscode.l10n.t('Finish signing in to {0} in the terminal, then press Retry.', client.agent.name), [{ label: vscode.l10n.t('Retry'), action: 'retry' }]);
+			return false;
+		}
+		await client.authenticate(pick.id);
+		return true;
+	}
+
+	/** Handles a notice button meant for the external agent. */
+	async externalAction(action: string): Promise<void> {
+		if (action === 'signIn' && this.external && !this.running) {
+			try {
+				const client = this.acp?.running ? this.acp : undefined;
+				if (client && !client.session && await this.externalSignIn(client)) {
+					this.retry();
+				} else if (!client) {
+					this.retry();
+				}
+			} catch (err) {
+				this.notice('error', String(err?.message ?? err));
+			}
+		}
+	}
+
+	private externalItemId(toolCallId: string): string {
+		return `acp_${toolCallId}`;
+	}
+
+	private onExternalUpdate(update: AcpUpdate): void {
+		if (this.replaying) {
+			return;
+		}
+		switch (update.sessionUpdate) {
+			case 'agent_message_chunk': {
+				const text = contentText((update as { content: AcpContent }).content);
+				this.externalReply += text;
+				this.onEvent({ type: 'text', text });
+				break;
+			}
+			case 'agent_thought_chunk':
+				this.onEvent({ type: 'thinking', text: contentText((update as { content: AcpContent }).content) });
+				break;
+			case 'tool_call':
+			case 'tool_call_update':
+				this.closeOpenBlocks();
+				this.showExternalTool(update as AcpToolCall);
+				break;
+			case 'plan':
+				this.todos = ((update as { entries: { content: string; status: Todo['status'] }[] }).entries ?? []).map(e => ({ content: String(e.content), status: e.status, activeForm: String(e.content) }));
+				this.postState();
+				break;
+			case 'available_commands_update': {
+				const commands = (update as { availableCommands: { name: string; description?: string; input?: { hint?: string } | null }[] }).availableCommands ?? [];
+				const own = BUILTIN_COMMANDS.filter(c => EXTERNAL_COMMANDS.has(c.name));
+				this.commandList = [...own, ...commands.filter(c => !EXTERNAL_COMMANDS.has(c.name)).map(c => ({ name: c.name, description: c.description ?? '', hint: c.input?.hint }))];
+				this.postState();
+				break;
+			}
+			case 'current_mode_update': {
+				const id = String((update as { currentModeId: string }).currentModeId);
+				if (this.acp?.session?.modes) {
+					this.acp.session.modes.currentModeId = id;
+				}
+				const mode = PERMISSION_MODES.find(m => agentMode(this.acp?.session?.modes?.availableModes ?? [], m) === id);
+				if (mode && mode !== this.mode) {
+					this.mode = mode;
+					this.postState();
+				}
+				break;
+			}
+		}
+	}
+
+	/** Shows or updates the card of one of the external agent's tool calls. */
+	private showExternalTool(call: AcpToolCall): Extract<TranscriptItem, { kind: 'tool' }> {
+		const id = this.externalItemId(call.toolCallId);
+		const existing = this.items.find(i => i.id === id);
+		const item: Extract<TranscriptItem, { kind: 'tool' }> = existing?.kind === 'tool'
+			? { ...existing }
+			: { kind: 'tool', id, name: toolName(call.kind), title: call.title || vscode.l10n.t('Tool call'), status: 'running' };
+		if (call.kind) {
+			item.name = toolName(call.kind);
+		}
+		if (call.title) {
+			item.title = call.title;
+		}
+		if (call.status === 'completed') {
+			item.status = 'done';
+		} else if (call.status === 'failed') {
+			item.status = 'error';
+		} else if (call.status && item.status !== 'awaiting') {
+			item.status = 'running';
+		}
+		if (call.rawInput !== undefined && call.rawInput !== null && typeof call.rawInput === 'object' && item.name !== 'Edit') {
+			item.detail = describeInput(item.name, call.rawInput as Record<string, unknown>);
+		}
+		for (const content of call.content ?? []) {
+			if (content.type === 'diff') {
+				const before = content.oldText ?? '';
+				item.display = this.keepDiff(id, { kind: 'diff', path: displayPath(this.workspace, content.path), diff: diffLines(before, content.newText), created: content.oldText === null || content.oldText === undefined, before, after: content.newText });
+				item.canOpenDiff = this.diffs.has(id);
+			} else if (content.type === 'terminal') {
+				this.terminalItems.set(content.terminalId, id);
+				item.output = this.terminalOutput.get(content.terminalId) ?? item.output;
+			} else if (content.type === 'content') {
+				const text = contentText(content.content);
+				if (text) {
+					item.output = clip(text, 20_000);
+				}
+			}
+		}
+		if (!item.detail && !item.display && !item.output && call.locations?.length) {
+			item.detail = call.locations.map(l => `${displayPath(this.workspace, l.path)}${l.line ? `:${l.line}` : ''}`).join('\n');
+		}
+		this.upsert(item);
+		return item;
+	}
+
+	/** Asks the user before the external agent runs a tool, unless the mode or a spec decides. */
+	private async externalPermission(call: AcpToolCall, options: AcpPermissionOption[]): Promise<string | undefined> {
+		const allowOnce = pickOption(options, 'allow_once', 'allow_always');
+		const rejectOnce = pickOption(options, 'reject_once', 'reject_always');
+		const item = this.showExternalTool(call);
+		const changes = item.name === 'Edit' || item.name === 'Delete' || item.name === 'Move';
+		const specFolder = this.specFolder;
+		if (specFolder && (changes || item.name === 'Bash')) {
+			const paths = (call.locations ?? []).map(l => l.path);
+			const command = typeof (call.rawInput as { command?: unknown })?.command === 'string' ? String((call.rawInput as { command: string }).command) : '';
+			const inside = changes && paths.length > 0 && paths.every(p => isInside(specFolder, p));
+			if (!inside && !(item.name === 'Bash' && isSafeCommand(command))) {
+				this.update<'tool'>(item.id, { status: 'denied', summary: vscode.l10n.t('blocked while the spec is written') });
+				return rejectOnce?.optionId;
+			}
+			if (inside) {
+				return allowOnce?.optionId;
+			}
+		}
+		// Agents without modes of their own follow Nighthawk's.
+		if (!this.acp?.session?.modes) {
+			if (this.mode === 'bypassPermissions' || (this.mode === 'acceptEdits' && item.name === 'Edit')) {
+				return allowOnce?.optionId;
+			}
+		}
+		const always = pickOption(options, 'allow_always');
+		this.update<'tool'>(item.id, { status: 'awaiting', approval: { always: always ? vscode.l10n.t('(this kind of call)') : '' } });
+		if (!this.services.isVisible()) {
+			this.services.reveal();
+		}
+		const answer = await this.wait<{ decision: 'allow' | 'always' | 'deny'; feedback?: string }>(item.id);
+		this.update<'tool'>(item.id, { status: answer?.decision === 'deny' ? 'denied' : 'running', approval: undefined });
+		if (!answer) {
+			return undefined;
+		}
+		if (answer.feedback) {
+			const queued = { kind: 'user' as const, id: newId('u'), text: answer.feedback, queued: true };
+			this.upsert(queued);
+			this.queue.push({ text: answer.feedback, itemId: queued.id });
+			this.postState();
+		}
+		if (answer.decision === 'deny') {
+			return rejectOnce?.optionId;
+		}
+		return (answer.decision === 'always' ? pickOption(options, 'allow_always', 'allow_once') : allowOnce)?.optionId;
+	}
+
+	private async externalRead(file: string, line?: number, limit?: number): Promise<string> {
+		const text = await this.workspace.readText(file);
+		if (line === undefined && limit === undefined) {
+			return text;
+		}
+		const lines = text.split('\n');
+		const start = Math.max(0, (line ?? 1) - 1);
+		return lines.slice(start, limit === undefined ? undefined : start + limit).join('\n');
+	}
+
+	private async externalWrite(file: string, content: string): Promise<void> {
+		let previous: string | undefined;
+		try {
+			previous = await this.workspace.readText(file);
+		} catch {
+			previous = undefined;
+		}
+		this.recordEdit(file, previous);
+		await this.workspace.writeText(file, content);
+	}
+
 	private onToolResult(id: string, result: ToolResult, status: 'done' | 'error' | 'denied'): void {
 		const item = this.items.find(i => i.id === id);
 		if (!item || item.kind !== 'tool') {
@@ -822,7 +1238,7 @@ export class Session implements vscode.Disposable {
 	}
 
 	private async permission(tool: Tool, input: Record<string, unknown>, callId: string, preview: ToolDisplay | undefined, project: Project): Promise<PermissionAnswer> {
-		const decision = decide({ tool, input, mode: this.mode, allow: [...project.allow, ...this.allowRules], deny: project.deny, workspace: this.workspace });
+		const decision = decide({ tool, input, mode: this.mode, allow: [...project.allow, ...this.allowRules], deny: project.deny, workspace: this.workspace, onlyEditInside: this.specFolder });
 		if (decision.behavior === 'allow') {
 			return { allow: true };
 		}
@@ -948,6 +1364,10 @@ export class Session implements vscode.Disposable {
 		if (this.running || !this.messages.length) {
 			return;
 		}
+		if (this.external) {
+			// External agents compact themselves; Claude Code takes /compact as a message.
+			return this.startTurn('/compact', `/compact${instructions ? ` ${instructions}` : ''}`);
+		}
 		const model = await this.model();
 		if (!model) {
 			return;
@@ -1004,6 +1424,13 @@ export class Session implements vscode.Disposable {
 			return;
 		}
 		if (choice !== 'code' && index >= 0) {
+			if (this.external) {
+				// The external agent keeps its own history, which cannot go back, so it starts over.
+				this.acp?.dispose();
+				this.acp = undefined;
+				this.external.sessionId = undefined;
+				this.notice('info', vscode.l10n.t('{0} starts over from here, without the earlier conversation.', this.external.agent));
+			}
 			const turn = this.turns[index];
 			this.messages.length = turn.messageIndex;
 			this.items = this.items.slice(0, turn.itemIndex);
@@ -1070,7 +1497,7 @@ export class Session implements vscode.Disposable {
 
 	toData(): SessionData {
 		const turns = this.turns.map(({ files: _files, ...turn }) => turn);
-		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots, turns };
+		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots, turns, specFolder: this.specFolder, external: this.external };
 	}
 
 	private async save(): Promise<void> {

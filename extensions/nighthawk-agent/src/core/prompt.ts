@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { memoriesPrompt, type Memory } from './memories';
 import type { PermissionMode } from './permissions';
 import type { InstructionFile } from './skills';
 
@@ -19,6 +20,8 @@ export interface PromptContext {
 	custom?: string;
 	/** Set for sub-agents: their role prompt replaces the main guidance. */
 	subagentPrompt?: string;
+	/** The saved memories; undefined when memories are off. */
+	memories?: Memory[];
 }
 
 const GUIDANCE = `You are Nighthawk Agent, a coding agent built into the Nighthawk editor. You help the user with software engineering work in their workspace: fixing bugs, adding features, refactoring, explaining code, running commands and more. Use the tools to act on the workspace; do not just describe what you would do.
@@ -68,6 +71,9 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 			'These instructions come from the user and the project. Follow them; they override the defaults above.',
 			...ctx.instructions.map(file => `<instructions file="${file.file}">\n${file.text.trim()}\n</instructions>`),
 		].join('\n\n'));
+	}
+	if (ctx.memories && !ctx.subagentPrompt) {
+		parts.push(memoriesPrompt(ctx.memories));
 	}
 	if (ctx.custom?.trim()) {
 		parts.push(`# Additional instructions\n${ctx.custom.trim()}`);

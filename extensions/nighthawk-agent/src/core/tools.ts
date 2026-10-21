@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { diffLines } from './diff';
 import { globToRegExp, SKIPPED_DIRS } from './glob';
 import { formatResults, type SearchOptions, type SearchResult } from './indexing';
+import { looksSecret, type MemoryScope } from './memories';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
 import type { Question, Todo, ToolDisplay } from './protocol';
 import type { ToolSpec } from './types';
@@ -87,7 +88,14 @@ export interface ToolContext {
 	readSkill?(name: string): Promise<{ body: string; dir: string } | undefined>;
 	/** Searches the codebase index; absent when indexing is off. */
 	searchCodebase?(query: string, options: SearchOptions, signal: AbortSignal): Promise<CodebaseSearchResult>;
+	/** Saves, changes or deletes a memory and says what happened; absent when memories are off. */
+	memory?(change: MemoryChange): Promise<string>;
 }
+
+export type MemoryChange =
+	| { action: 'save'; text: string; scope: MemoryScope }
+	| { action: 'update'; id: string; text: string }
+	| { action: 'delete'; id: string };
 
 export interface CodebaseSearchResult {
 	results: SearchResult[];
@@ -721,6 +729,58 @@ const codebaseSearchTool: Tool = {
 	},
 };
 
+// --- Memory
+
+const memoryTool: Tool = {
+	kind: 'other',
+	spec: {
+		name: 'Memory',
+		description: [
+			'Saves a short fact to remember in later conversations, or updates or deletes one by the id shown in the Memories section of your instructions.',
+			'Scope "user" is for the user\'s own preferences that apply in every project ("prefers pnpm", "wants short answers"); "project" for facts about this codebase ("tests run with npm run test:unit", "the API client is generated, never edit src/gen").',
+			'One short sentence per memory. Never save secrets.',
+		].join('\n'),
+		inputSchema: {
+			type: 'object',
+			properties: {
+				action: { type: 'string', enum: ['save', 'update', 'delete'], description: 'What to do (default save).' },
+				text: { type: 'string', description: 'The fact, as one short sentence. Required to save or update.' },
+				scope: { type: 'string', enum: ['project', 'user'], description: 'Who the fact is about, for save (default project).' },
+				id: { type: 'string', description: 'The memory to update or delete.' },
+			},
+			additionalProperties: false,
+		},
+	},
+	title: input => {
+		const action = str(input, 'action', false) || 'save';
+		return action === 'delete' ? `Forget memory ${str(input, 'id', false)}` : `${action === 'update' ? 'Update memory' : 'Remember'}: ${str(input, 'text', false)}`;
+	},
+	async run(input, ctx) {
+		if (!ctx.memory) {
+			throw new ToolError('Memories are turned off.');
+		}
+		const action = str(input, 'action', false) || 'save';
+		const text = str(input, 'text', false).trim();
+		if (action !== 'delete' && !text) {
+			throw new ToolError('Give the fact to remember in "text".');
+		}
+		if (looksSecret(text)) {
+			throw new ToolError('That looks like it contains a secret, which is never saved. Save the fact without it.');
+		}
+		let change: MemoryChange;
+		if (action === 'save') {
+			change = { action, text, scope: str(input, 'scope', false) === 'user' ? 'user' : 'project' };
+		} else if (action === 'update' || action === 'delete') {
+			const id = str(input, 'id').replace(/^\[|\]$/g, '');
+			change = action === 'update' ? { action, id, text } : { action, id };
+		} else {
+			throw new ToolError('"action" must be save, update or delete.');
+		}
+		const result = await ctx.memory(change);
+		return { content: result, display: { kind: 'text', text: result }, summary: action === 'delete' ? 'forgotten' : 'saved' };
+	},
+};
+
 // --- Bash
 
 const bashTool: Tool = {
@@ -1158,7 +1218,7 @@ const exitPlanTool: Tool = {
 
 export const BUILTIN_TOOLS: Tool[] = [
 	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool,
-	bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
+	memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 

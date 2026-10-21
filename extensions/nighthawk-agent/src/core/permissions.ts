@@ -6,7 +6,7 @@
 import * as path from 'node:path';
 import { globToRegExp } from './glob';
 import type { Tool } from './tools';
-import { isInWorkspace, type Workspace } from './workspace';
+import { isInside, isInWorkspace, type Workspace } from './workspace';
 
 /**
  * - default: reads run freely; edits, commands and web requests ask first.
@@ -112,9 +112,14 @@ export interface PermissionInput {
 	allow: Rule[];
 	deny: Rule[];
 	workspace: Workspace;
+	/**
+	 * Set while the agent writes a spec: the only folder it may change. Edits
+	 * there run without asking; other edits and commands that change things are blocked.
+	 */
+	onlyEditInside?: string;
 }
 
-export function decide({ tool, input, mode, allow, deny, workspace }: PermissionInput): Decision {
+export function decide({ tool, input, mode, allow, deny, workspace, onlyEditInside }: PermissionInput): Decision {
 	const name = tool.spec.name;
 	if (deny.some(rule => ruleMatches(rule, tool, input, workspace))) {
 		return { behavior: 'deny', reason: `A permission rule blocks ${name} here.` };
@@ -128,6 +133,14 @@ export function decide({ tool, input, mode, allow, deny, workspace }: Permission
 	const outside = paths.some(p => !isInWorkspace(workspace, p));
 	if (mode === 'plan' && (tool.kind === 'edit' || tool.kind === 'execute') && !(name === 'Bash' && isSafeCommand(String(input.command ?? '')))) {
 		return { behavior: 'deny', reason: 'Plan mode is read only. Finish researching, then present your plan with ExitPlanMode.' };
+	}
+	if (onlyEditInside && (tool.kind === 'edit' || tool.kind === 'execute')) {
+		if (tool.kind === 'edit' && paths.length && paths.every(p => isInside(onlyEditInside, p))) {
+			return { behavior: 'allow' };
+		}
+		if (!(name === 'Bash' && isSafeCommand(String(input.command ?? '')))) {
+			return { behavior: 'deny', reason: `While the spec is written, only files in ${onlyEditInside} can change. Write the spec document there; the code changes come with the tasks once the user approves them.` };
+		}
 	}
 	if (allow.some(rule => ruleMatches(rule, tool, input, workspace) && !(EDIT_TOOLS.has(name) && outside && !rule.spec))) {
 		return { behavior: 'allow' };
