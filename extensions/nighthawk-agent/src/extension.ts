@@ -7,9 +7,16 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
+import { BackgroundAgents } from './host/background';
+import type { BackgroundTask } from './core/background';
 import { Endpoints, type QuickSetup } from './host/endpoints';
+import { chooseReviewTarget, generateCommitMessage } from './host/git';
+import { branchReviewPrompt } from './core/commit';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
+import { TerminalAssistant } from './host/terminal';
+import { UsageMeter } from './host/usage';
+import { UsagePanel } from './host/usageView';
 
 function workspaceKey(): string {
 	const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.toString()).sort().join('|');
@@ -20,14 +27,24 @@ export function activate(context: vscode.ExtensionContext): void {
 	const endpoints = new Endpoints(context);
 	const mcp = new McpManager(context);
 	const diffs = DiffContentProvider.register();
+	const usage = new UsageMeter(context, () => !!endpoints.current());
 	const host: ControllerHost = {
 		context,
 		endpoints,
 		mcp,
+		usage,
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
 	};
 	const view = new AgentViewProvider(host);
+	const background = new BackgroundAgents(host);
+	host.liveSession = id => background.live(id);
+	const terminal = new TerminalAssistant(endpoints, usage, async (shown, prompt) => {
+		const controller = await view.show();
+		controller.startNew();
+		await controller.session.sendTask(shown, prompt);
+	});
+	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
 	status.name = vscode.l10n.t('Agent Model');
@@ -41,8 +58,18 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, diffs.disposable,
+		endpoints, mcp, view, status, usage, background, terminal, diffs.disposable,
+		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
+		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
+		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.resume', task(t => background.resume(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.review', task(t => background.review(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.merge', task(t => background.merge(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.openFolder', task(t => background.openFolder(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.stop', task(t => background.stop(t))),
+		vscode.commands.registerCommand('nighthawk.agent.background.discard', task(t => background.remove(t))),
 		endpoints.onDidChange(updateStatus),
+		endpoints.onDidChange(() => usage.refresh()),
 		vscode.window.registerWebviewViewProvider(AgentViewProvider.viewId, view, { webviewOptions: { retainContextWhenHidden: true } }),
 		vscode.commands.registerCommand('nighthawk.agent.open', async () => (await view.show()).focusInput()),
 		vscode.commands.registerCommand('nighthawk.agent.openInEditor', () => openAgentPanel(host)),
@@ -87,6 +114,23 @@ export function activate(context: vscode.ExtensionContext): void {
 			await mcp.restart();
 			vscode.window.showInformationMessage(vscode.l10n.t('MCP servers restarted.'));
 		}),
+		vscode.commands.registerCommand('nighthawk.ai.generateCommitMessage', (repository?: unknown) => generateCommitMessage(endpoints, usage, repository)),
+		vscode.commands.registerCommand('nighthawk.ai.showUsage', () => UsagePanel.show(context, usage, async id => (await view.show()).open(id))),
+		vscode.commands.registerCommand('nighthawk.ai.setMonthlyLimit', () => usage.editLimit()),
+		vscode.commands.registerCommand('nighthawk.agent.reviewBranch', async (repository?: unknown) => {
+			const target = await chooseReviewTarget(repository);
+			if (!target) {
+				return;
+			}
+			const controller = await view.show();
+			controller.startNew();
+			const shown = target.branch
+				? vscode.l10n.t('Review the branch {0} against {1} before it is pushed.', target.branch, target.base)
+				: vscode.l10n.t('Review this branch against {0} before it is pushed.', target.base);
+			await controller.session.sendTask(shown, branchReviewPrompt(target.base, target.branch));
+		}),
+		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
+		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
 		vscode.commands.registerCommand('nighthawk.ai.selectModel', () => endpoints.pickModel()),
 		vscode.commands.registerCommand('nighthawk.ai.setApiKey', () => endpoints.setKey()),

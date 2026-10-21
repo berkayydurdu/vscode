@@ -129,6 +129,65 @@ export function registerTeamCommands(account: Account, fs: TeamFileSystem, tree:
 		await vscode.commands.executeCommand('nighthawk.notes.teams.focus');
 	};
 
+	/** Emails invites, or opens the mail app with a link when the server cannot send email. */
+	const inviteByEmail = async (team: Team): Promise<void> => {
+		const input = await vscode.window.showInputBox({
+			title: vscode.l10n.t('Invite to {0} by Email', team.name),
+			prompt: vscode.l10n.t('Email addresses, separated by commas or spaces'),
+			placeHolder: 'ada@example.com, grace@example.com',
+			ignoreFocusOut: true,
+			validateInput: value => {
+				const bad = emailList(value).filter(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+				return bad.length ? vscode.l10n.t('Not an email address: {0}', bad.join(', ')) : undefined;
+			},
+		});
+		const emails = input ? emailList(input) : [];
+		if (!emails.length) {
+			return;
+		}
+		const role = await pickRole(vscode.l10n.t('What can they do in {0}?', team.name), team.role === 'owner');
+		if (!role) {
+			return;
+		}
+		const message = await vscode.window.showInputBox({
+			title: vscode.l10n.t('Invite to {0} by Email', team.name),
+			prompt: vscode.l10n.t('A note to add to the email (optional)'),
+			ignoreFocusOut: true,
+		});
+		if (message === undefined) {
+			return;
+		}
+		const hours = config().get<number>('teams.inviteExpiryHours', 168);
+		if (!(await account.client.info()).email) {
+			// The server has no mail set up: write the email in the user's mail app instead.
+			const invite = await account.client.createInvite(team.id, role, hours, emails.length);
+			tree.refresh();
+			const body = [
+				vscode.l10n.t('{0} invited you to the team {1} on Nighthawk Notes.', account.user?.name ?? '', team.name),
+				...(message.trim() ? ['', message.trim()] : []),
+				'',
+				vscode.l10n.t('Accept the invite: {0}', invite.url),
+				vscode.l10n.t('Or, in Nighthawk, run "Notes: Join Team with Invite..." and enter the code {0}.', invite.code),
+			].join('\n');
+			const subject = vscode.l10n.t('Join {0} on Nighthawk Notes', team.name);
+			await vscode.env.clipboard.writeText(invite.url);
+			await vscode.env.openExternal(vscode.Uri.parse(`mailto:${emails.map(encodeURIComponent).join(',')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, true));
+			vscode.window.showInformationMessage(vscode.l10n.t('This notes server cannot send email, so your mail app opened with the invite. The link is also copied.'));
+			return;
+		}
+		const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Sending invites...') },
+			() => account.client.emailInvites(team.id, emails, role, hours, message.trim() || undefined));
+		tree.refresh();
+		if (result.failed.length) {
+			vscode.window.showWarningMessage(vscode.l10n.t('Could not email {0}: {1}', result.failed.map(f => f.email).join(', '), result.failed[0].error));
+		}
+		if (result.sent.length) {
+			vscode.window.showInformationMessage(result.sent.length === 1
+				? vscode.l10n.t('Invite sent to {0}.', result.sent[0].email ?? '')
+				: vscode.l10n.t('Invites sent to {0} people.', result.sent.length));
+		}
+	};
+
 	return vscode.Disposable.from(
 		run('nighthawk.notes.teams.signIn', async () => {
 			const credentials = await askCredentials(false);
@@ -225,6 +284,17 @@ export function registerTeamCommands(account: Account, fs: TeamFileSystem, tree:
 		run('nighthawk.notes.teams.invite', async (node?: TeamNode) => {
 			const team = await pickTeam('admin', node);
 			if (!team) {
+				return;
+			}
+			const how = await vscode.window.showQuickPick([
+				{ label: `$(mail) ${vscode.l10n.t('Invite by Email')}`, detail: vscode.l10n.t('Each person gets an email with a link that only works for their address'), byEmail: true },
+				{ label: `$(link) ${vscode.l10n.t('Copy an Invite Link')}`, detail: vscode.l10n.t('Share it any way you like'), byEmail: false },
+			], { placeHolder: vscode.l10n.t('How do you want to invite people to {0}?', team.name) });
+			if (!how) {
+				return;
+			}
+			if (how.byEmail) {
+				await inviteByEmail(team);
 				return;
 			}
 			const role = await pickRole(vscode.l10n.t('What can people who join with this invite do?'), team.role === 'owner');
@@ -380,4 +450,10 @@ export class InviteUriHandler implements vscode.UriHandler {
 			}
 		}
 	}
+}
+
+/** The addresses in what a person typed or pasted, such as "Ada <ada@example.com>, grace@example.com". */
+function emailList(text: string): string[] {
+	const emails = text.split(/[\s,;]+/).map(part => part.replace(/^<|>$/g, '').trim()).filter(part => part.includes('@'));
+	return [...new Set(emails.map(email => email.toLowerCase()))];
 }

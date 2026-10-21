@@ -8,6 +8,10 @@
   "engines": {
     "vscode": "^1.100.0"
   },
+  "enabledApiProposals": [
+    "contribSourceControlInputBoxMenu",
+    "terminalQuickFixProvider"
+  ],
   "categories": [
     "AI",
     "Other"
@@ -100,12 +104,78 @@
             "scope": "application",
             "default": "",
             "markdownDescription": "%config.ai.model%"
+          },
+          "nighthawk.ai.monthlyLimit": {
+            "type": "number",
+            "scope": "application",
+            "default": 0,
+            "minimum": 0,
+            "markdownDescription": "%config.ai.monthlyLimit%"
+          },
+          "nighthawk.ai.prices": {
+            "type": "object",
+            "scope": "application",
+            "default": {},
+            "markdownDescription": "%config.ai.prices%",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "input",
+                "output"
+              ],
+              "properties": {
+                "input": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.input%"
+                },
+                "output": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.output%"
+                },
+                "cacheRead": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.cacheRead%"
+                },
+                "cacheWrite": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "%config.ai.prices.cacheWrite%"
+                }
+              }
+            }
           }
         }
       },
       {
         "title": "%config.agent.title%",
         "properties": {
+          "nighthawk.agent.background.maxParallel": {
+            "type": "number",
+            "scope": "application",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 10,
+            "description": "%config.agent.background.maxParallel%"
+          },
+          "nighthawk.agent.background.permissionMode": {
+            "type": "string",
+            "scope": "application",
+            "enum": [
+              "default",
+              "acceptEdits",
+              "bypassPermissions"
+            ],
+            "enumDescriptions": [
+              "%config.agent.permissionMode.default%",
+              "%config.agent.permissionMode.acceptEdits%",
+              "%config.agent.permissionMode.bypassPermissions%"
+            ],
+            "default": "acceptEdits",
+            "description": "%config.agent.background.permissionMode%"
+          },
           "nighthawk.agent.permissionMode": {
             "type": "string",
             "scope": "application",
@@ -213,10 +283,70 @@
           "id": "nighthawk.agent.chat",
           "name": "%view.chat%",
           "icon": "$(sparkle)"
+        },
+        {
+          "id": "nighthawk.agent.background",
+          "name": "%view.background%",
+          "icon": "$(layers)",
+          "visibility": "collapsed"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "nighthawk.agent.background",
+        "contents": "%view.background.welcome%"
+      }
+    ],
     "commands": [
+      {
+        "command": "nighthawk.agent.background.start",
+        "title": "%command.background.start%",
+        "category": "%category.agent%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nighthawk.agent.background.open",
+        "title": "%command.background.open%",
+        "category": "%category.agent%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nighthawk.agent.background.resume",
+        "title": "%command.background.resume%",
+        "category": "%category.agent%",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "nighthawk.agent.background.review",
+        "title": "%command.background.review%",
+        "category": "%category.agent%",
+        "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "nighthawk.agent.background.merge",
+        "title": "%command.background.merge%",
+        "category": "%category.agent%",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "nighthawk.agent.background.openFolder",
+        "title": "%command.background.openFolder%",
+        "category": "%category.agent%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "nighthawk.agent.background.stop",
+        "title": "%command.background.stop%",
+        "category": "%category.agent%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "nighthawk.agent.background.discard",
+        "title": "%command.background.discard%",
+        "category": "%category.agent%",
+        "icon": "$(trash)"
+      },
       {
         "command": "nighthawk.agent.open",
         "title": "%command.open%",
@@ -286,10 +416,85 @@
         "title": "%command.manageEndpoints%",
         "category": "%category.ai%",
         "icon": "$(server)"
+      },
+      {
+        "command": "nighthawk.ai.showUsage",
+        "title": "%command.showUsage%",
+        "category": "%category.ai%",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "nighthawk.ai.setMonthlyLimit",
+        "title": "%command.setMonthlyLimit%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.generateCommitMessage",
+        "title": "%command.generateCommitMessage%",
+        "category": "%category.ai%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.agent.reviewBranch",
+        "title": "%command.reviewBranch%",
+        "category": "%category.agent%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "nighthawk.terminal.askForCommand",
+        "title": "%command.terminal.askForCommand%",
+        "category": "%category.terminal%",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "nighthawk.terminal.explainError",
+        "title": "%command.terminal.explainError%",
+        "category": "%category.terminal%",
+        "icon": "$(question)"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "nighthawk.agent.background.open",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.resume",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.review",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.merge",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.openFolder",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.stop",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.agent.background.discard",
+          "when": "false"
+        }
+      ],
       "view/title": [
+        {
+          "command": "nighthawk.terminal.askForCommand",
+          "when": "view == terminal",
+          "group": "navigation@0"
+        },
+        {
+          "command": "nighthawk.agent.background.start",
+          "when": "view == nighthawk.agent.background",
+          "group": "navigation"
+        },
         {
           "command": "nighthawk.agent.newSession",
           "when": "view == nighthawk.agent.chat",
@@ -314,6 +519,82 @@
           "command": "nighthawk.agent.restartMcp",
           "when": "view == nighthawk.agent.chat",
           "group": "1_settings@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nighthawk.agent.background.review",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(done|stopped|failed|waiting|running)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.agent.background.merge",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(done|stopped)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "nighthawk.agent.background.stop",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(running|waiting|queued)$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "nighthawk.agent.background.open",
+          "when": "view == nighthawk.agent.background",
+          "group": "1_open@1"
+        },
+        {
+          "command": "nighthawk.agent.background.review",
+          "when": "view == nighthawk.agent.background",
+          "group": "1_open@2"
+        },
+        {
+          "command": "nighthawk.agent.background.openFolder",
+          "when": "view == nighthawk.agent.background",
+          "group": "1_open@3"
+        },
+        {
+          "command": "nighthawk.agent.background.resume",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(done|stopped|failed)$/",
+          "group": "2_work@1"
+        },
+        {
+          "command": "nighthawk.agent.background.merge",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(done|stopped|failed)$/",
+          "group": "2_work@2"
+        },
+        {
+          "command": "nighthawk.agent.background.stop",
+          "when": "view == nighthawk.agent.background && viewItem =~ /^backgroundTask\\.(running|waiting|queued)$/",
+          "group": "2_work@3"
+        },
+        {
+          "command": "nighthawk.agent.background.discard",
+          "when": "view == nighthawk.agent.background",
+          "group": "3_remove@1"
+        }
+      ],
+      "scm/inputBox": [
+        {
+          "command": "nighthawk.ai.generateCommitMessage",
+          "when": "scmProvider == git"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "nighthawk.agent.reviewBranch",
+          "when": "scmProvider == git",
+          "group": "navigation@50"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "nighthawk.terminal.askForCommand",
+          "group": "nighthawk@1"
+        },
+        {
+          "command": "nighthawk.terminal.explainError",
+          "when": "nighthawk.terminal.hasFailure",
+          "group": "nighthawk@2"
         }
       ],
       "editor/context": [
@@ -344,8 +625,33 @@
         "key": "ctrl+alt+n",
         "mac": "cmd+alt+n",
         "when": "focusedView == nighthawk.agent.chat"
+      },
+      {
+        "command": "nighthawk.terminal.askForCommand",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "terminalFocus"
       }
-    ]
+    ],
+    "terminalQuickFixes": [
+      {
+        "id": "nighthawk.agent.explainError",
+        "commandLineMatcher": ".+",
+        "commandExitResult": "error",
+        "outputMatcher": {
+          "anchor": "bottom",
+          "length": 40,
+          "lineMatcher": ".+",
+          "offset": 0
+        },
+        "kind": "explain"
+      }
+    ],
+    "configurationDefaults": {
+      "terminal.integrated.commandsToSkipShell": [
+        "nighthawk.terminal.askForCommand"
+      ]
+    }
   },
   "scripts": {
     "compile": "npx gulp compile-extension:nighthawk-agent && npm run build-webview",

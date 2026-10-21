@@ -665,6 +665,7 @@ class App {
 			}, icon('chip', 13), h('span', { class: 'chip-label' }, this.state.model ?? t('Connect a model'))),
 			h('span', { class: 'spacer' }),
 			this.state.queued > 0 && h('span', { class: 'badge' }, t('{0} queued', this.state.queued)),
+			this.state.cost !== undefined && h('button', { class: 'cost', title: t('Estimated cost of this conversation. Click for usage this month.'), onclick: () => post({ type: 'action', action: 'showUsage' }) }, this.state.cost < 0.01 ? '<$0.01' : `$${this.state.cost.toFixed(2)}`),
 			context !== undefined && contextRing(context, this.state.tokens ?? 0),
 			this.state.running && !hasText
 				? h('button', { class: 'send stop', title: t('Stop (Esc)'), 'aria-label': t('Stop'), onclick: () => post({ type: 'stop' }) }, icon('stop', 14))

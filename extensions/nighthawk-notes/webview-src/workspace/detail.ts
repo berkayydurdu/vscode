@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Comment, Item, ItemChange, Review, Verdict, Worklog } from './api';
+import { extensionRequest, vscode, type Comment, type Item, type ItemChange, type RepositoryLinks, type Review, type Verdict, type Worklog } from './api';
 import { select } from './card';
 import { autosize, confirmDialog, kindIcon, labelChip, preservingFocus, priorityIcon, reportError, showMenu, statusIcon, toast } from './components';
 import { t } from './l10n';
@@ -31,6 +31,7 @@ export class DetailPanel {
 	private extras: Extras | undefined;
 	private loadingSeq = -1;
 	private expanded = false;
+	private code: { itemId: string; repositories: RepositoryLinks[] | undefined } | undefined;
 
 	// Drafts survive re-renders, which happen whenever a teammate changes something.
 	private editingBody: string | null = null;
@@ -122,6 +123,7 @@ export class DetailPanel {
 					this.description(item),
 					this.checklist(item),
 					isRfc ? null : this.time(item),
+					isRfc ? null : this.codeSection(item),
 					this.comments(item),
 				),
 			),
@@ -307,6 +309,69 @@ export class DetailPanel {
 				canEdit ? h('button', { class: 'icon-button hover-only', title: t('Remove'), onclick: () => set(item.checklist.filter(c => c.id !== entry.id)) }, icon('close', 12)) : null,
 			))),
 			canEdit ? add : null,
+		);
+	}
+
+	private loadCode(item: Item): void {
+		this.code = { itemId: item.id, repositories: undefined };
+		extensionRequest<{ repositories: RepositoryLinks[] }>('codeLinks', { key: this.model.key(item) }).then(({ repositories }) => {
+			if (this.code?.itemId === item.id) {
+				this.code.repositories = repositories;
+				this.update();
+			}
+		}, () => undefined);
+	}
+
+	/** Branches and commits in the open folders that mention this item's key. */
+	private codeSection(item: Item): HTMLElement {
+		if (this.code?.itemId !== item.id) {
+			this.loadCode(item);
+		}
+		const key = this.model.key(item);
+		const repositories = this.code?.repositories;
+		const branches = repositories?.flatMap(r => r.branches.map(branch => ({ repo: r, branch }))) ?? [];
+		const commits = repositories?.flatMap(r => r.commits.map(commit => ({ repo: r, commit }))).sort((a, b) => b.commit.date - a.commit.date) ?? [];
+		const multiple = (repositories?.length ?? 0) > 1;
+
+		let body: Node;
+		if (!repositories) {
+			body = h('div', { class: 'muted small' }, t('Looking for commits...'));
+		} else if (!branches.length && !commits.length) {
+			body = h('div', { class: 'code-empty muted small' }, repositories.length
+				? t('Nothing mentions {0} yet. Start a branch, or put {0} in a branch name or commit message, and it shows up here.', key)
+				: t('Open the project folder in this window to see the branches and commits that mention {0}.', key));
+		} else {
+			body = h('div', { class: 'code-links' },
+				branches.length ? h('div', { class: 'code-branches' }, branches.map(({ repo, branch }) => h('span', { class: { 'code-branch': true, current: branch === repo.current }, title: multiple ? `${repo.name}: ${branch}` : branch },
+					icon('branch', 12),
+					h('span', { class: 'code-branch-name' }, branch),
+					branch === repo.current ? h('span', { class: 'code-current' }, t('checked out')) : null,
+				))) : null,
+				commits.length ? h('div', { class: 'worklogs code-commits' }, commits.map(({ repo, commit }) => h('button', {
+					class: 'worklog code-commit',
+					title: t('Show the changes of {0}', commit.shortHash),
+					onclick: () => vscode.postMessage({ type: 'openCommit', root: repo.root, hash: commit.hash, subject: commit.subject }),
+				},
+					icon('commit', 14),
+					h('code', { class: 'code-hash' }, commit.shortHash),
+					h('span', { class: 'worklog-note code-subject' }, commit.subject),
+					h('span', { class: 'spacer' }),
+					multiple ? h('span', { class: 'muted small' }, repo.name) : null,
+					h('span', { class: 'muted small' }, commit.author),
+					h('span', { class: 'muted small' }, timeAgo(commit.date * 1000)),
+				))) : null,
+			);
+		}
+
+		return h('section', { class: 'detail-section' },
+			h('div', { class: 'section-heading' },
+				h('h3', null, t('Code')),
+				commits.length ? h('span', { class: 'muted small' }, commits.length === 1 ? t('1 commit') : t('{0} commits', commits.length)) : null,
+				h('span', { class: 'spacer' }),
+				h('button', { class: 'icon-button', title: t('Refresh'), onclick: () => this.loadCode(item) }, icon('sync', 12)),
+				h('button', { class: 'button ghost small', onclick: () => vscode.postMessage({ type: 'startBranch', key, title: item.title }) }, icon('branch', 12), t('Start Branch')),
+			),
+			body,
 		);
 	}
 

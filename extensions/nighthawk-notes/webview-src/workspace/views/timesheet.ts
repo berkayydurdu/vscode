@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Item, Worklog } from '../api';
+import { extensionRequest, type Item, type Suggestion, type Worklog } from '../api';
 import { select } from '../card';
 import { kindIcon, modal, reportError, showMenu, statusIcon, toast } from '../components';
 import { t } from '../l10n';
@@ -26,6 +26,7 @@ export class Timesheet {
 	private loadedKey = '';
 	private loading = false;
 	private readonly addedRows = new Map<string, Set<string>>();
+	private suggestions: Suggestion[] = [];
 
 	constructor(private readonly model: Model) { }
 
@@ -53,13 +54,31 @@ export class Timesheet {
 			return;
 		}
 		this.loading = true;
-		this.model.api.worklogs({ from: key, to: isoDate(addDays(this.weekStart, 6)) }).then(logs => {
+		const to = isoDate(addDays(this.weekStart, 6));
+		this.model.api.worklogs({ from: key, to }).then(async logs => {
 			this.logs = logs;
 			this.loadedKey = key;
+			this.suggestions = await this.loadSuggestions(key, to).catch(() => []);
 		}, reportError).finally(() => {
 			this.loading = false;
 			this.model.changed();
 		});
+	}
+
+	/** Asks the extension what it saw you work on this week that is not logged yet. */
+	private loadSuggestions(from: string, to: string): Promise<Suggestion[]> {
+		if (!this.model.canEdit) {
+			return Promise.resolve([]);
+		}
+		const logged: Record<string, number> = {};
+		for (const log of this.logs) {
+			const item = this.model.items.get(log.itemId);
+			if (item && log.userId === this.model.me.id) {
+				const key = `${item.number}|${log.date}`;
+				logged[key] = (logged[key] ?? 0) + log.minutes;
+			}
+		}
+		return extensionRequest<Suggestion[]>('timeSuggestions', { from, to, logged });
 	}
 
 	render(): HTMLElement {
@@ -86,7 +105,76 @@ export class Timesheet {
 		);
 
 		const grid = user === TEAM ? this.teamGrid(days, today) : this.personGrid(user, days, today);
-		return h('div', { class: 'timesheet' }, toolbar, grid);
+		const suggested = user === this.model.me.id && this.model.canEdit && this.suggestions.length ? this.suggestionPanel(today) : null;
+		return h('div', { class: 'timesheet' }, toolbar, suggested, grid);
+	}
+
+	/** "Suggested from your activity": tracked time to log in one click. */
+	private suggestionPanel(today: string): HTMLElement {
+		const byNumber = new Map(this.model.all().map(item => [item.number, item]));
+		const linked = this.suggestions.filter(s => s.number && byNumber.has(s.number));
+		const total = linked.reduce((sum, s) => sum + s.minutes, 0);
+		const yesterday = isoDate(addDays(parseIsoDate(today), -1));
+		const dayLabel = (date: string) => date === today ? t('Today') : date === yesterday ? t('Yesterday') : parseIsoDate(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+		const note = (s: Suggestion) => s.files.length ? t('Worked on {0}: {1}', s.branch, s.files.slice(0, 3).join(', ')) : t('Worked on {0}', s.branch);
+		const logAll = async () => {
+			try {
+				await Promise.all(linked.map(s => this.model.api.logTime(byNumber.get(s.number!)!.id, s.minutes, s.date, note(s))));
+				toast(t('Logged {0} from your activity', formatMinutes(total)));
+			} catch (err) {
+				reportError(err);
+			}
+			this.afterLog();
+		};
+		const dismiss = async (s: Suggestion) => {
+			this.suggestions = this.suggestions.filter(other => other.id !== s.id);
+			this.model.changed();
+			await extensionRequest('dismissSuggestion', { suggestion: s.id }).catch(reportError);
+		};
+		const rows = this.suggestions.map(s => {
+			const item = s.number ? byNumber.get(s.number) : undefined;
+			const what = item
+				? h('button', { class: 'ts-suggest-what', onclick: () => select(this.model, item.id), title: item.title }, statusIcon(item.kind, item.status), h('span', { class: 'row-key' }, this.model.key(item)), h('span', { class: 'ellipsis' }, item.title))
+				: h('span', { class: 'ts-suggest-what' }, icon('branch', 14), h('span', { class: 'ellipsis' }, s.branch), h('span', { class: 'muted small' }, t('no ticket')));
+			const detail = [
+				s.logged ? t('{0} active, {1} logged', formatMinutes(s.tracked), formatMinutes(s.logged)) : t('{0} active', formatMinutes(s.tracked)),
+				item ? s.branch : s.repo,
+				s.files.length > 2 ? t('{0} and {1} more', s.files.slice(0, 2).join(', '), s.files.length - 2) : s.files.join(', '),
+			].filter(Boolean).join(' \u00b7 ');
+			const edit = () => logTimeDialog(this.model, { itemId: item?.id, date: s.date, minutes: s.minutes, note: note(s), onDone: () => this.afterLog(item?.id) });
+			return h('div', { class: 'ts-suggest-row' },
+				h('span', { class: 'ts-suggest-day' }, dayLabel(s.date)),
+				h('div', { class: 'ts-suggest-main' }, what, h('span', { class: 'ts-suggest-detail' }, detail)),
+				item
+					? h('button', {
+						class: 'button small primary',
+						onclick: async () => {
+							try {
+								await this.model.api.logTime(item.id, s.minutes, s.date, note(s));
+								toast(t('Logged {0} on {1}', formatMinutes(s.minutes), this.model.key(item)));
+							} catch (err) {
+								reportError(err);
+							}
+							this.afterLog(item.id);
+						},
+					}, t('Log {0}', formatMinutes(s.minutes)))
+					: h('button', { class: 'button small', onclick: edit }, t('Pick Ticket')),
+				item ? h('button', { class: 'icon-button', title: t('Change before logging'), 'aria-label': t('Change before logging'), onclick: edit }, icon('edit', 14)) : h('span'),
+				h('button', { class: 'icon-button', title: t('Dismiss'), 'aria-label': t('Dismiss'), onclick: () => dismiss(s) }, icon('close', 14)),
+			);
+		});
+		return h('section', { class: 'ts-suggest' },
+			h('div', { class: 'ts-suggest-head' },
+				h('span', { class: 'ts-suggest-icon' }, icon('sparkle', 14)),
+				h('div', null,
+					h('div', { class: 'ts-suggest-title' }, t('Suggested from your activity')),
+					h('div', { class: 'muted small' }, t('Active time in Nighthawk while a ticket\'s branch was checked out. Nothing is shared until you log it.')),
+				),
+				h('span', { class: 'spacer' }),
+				linked.length > 1 ? h('button', { class: 'button small', onclick: logAll }, icon('check', 14), t('Log All ({0})', formatMinutes(total))) : null,
+			),
+			rows,
+		);
 	}
 
 	private moveWeek(delta: number): void {
@@ -283,7 +371,7 @@ export class Timesheet {
 }
 
 /** The "Log time" dialog: ticket, day, duration and what was done. */
-export function logTimeDialog(model: Model, options: { itemId?: string; date?: string; onDone?: () => void }): void {
+export function logTimeDialog(model: Model, options: { itemId?: string; date?: string; minutes?: number; note?: string; onDone?: () => void }): void {
 	let itemId = options.itemId;
 	const itemButton = h('button', { class: 'property-button wide' });
 	const showItem = () => {
@@ -300,8 +388,8 @@ export function logTimeDialog(model: Model, options: { itemId?: string; date?: s
 		}, { search: true, placeholder: t('Find a ticket...') });
 	});
 	const date = h('input', { type: 'date', class: 'text-input', value: options.date ?? isoDate(new Date()) });
-	const duration = h('input', { class: 'text-input', placeholder: t('e.g. 1h 30m') });
-	const note = h('textarea', { class: 'text-input', rows: 3, placeholder: t('What did you work on? (optional)') });
+	const duration = h('input', { class: 'text-input', placeholder: t('e.g. 1h 30m'), value: options.minutes ? formatMinutes(options.minutes) : undefined });
+	const note = h('textarea', { class: 'text-input', rows: 3, placeholder: t('What did you work on? (optional)'), value: options.note });
 	const error = h('div', { class: 'form-error' });
 	const submit = async () => {
 		const minutes = parseDuration(duration.value);

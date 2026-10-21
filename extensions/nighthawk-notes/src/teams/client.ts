@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { TextOperation } from '../core/textOperation';
 import type { ServerStarter } from './localServer';
 
 // Types mirror notes-server/src/store.ts.
@@ -40,6 +41,8 @@ export interface Invite {
 	maxUses: number | null;
 	uses: number;
 	url: string;
+	/** Set for an invite sent by email: only that address can accept it. */
+	email: string | null;
 }
 
 export interface NoteMeta {
@@ -113,7 +116,7 @@ export class NotesClient {
 	}
 
 	info() {
-		return this.request<{ name: string; version: number; allowRegistration: boolean }>('GET', '/api/info');
+		return this.request<{ name: string; version: number; allowRegistration: boolean; email?: boolean }>('GET', '/api/info');
 	}
 
 	register(email: string, name: string, password: string) {
@@ -172,6 +175,11 @@ export class NotesClient {
 		return (await this.request<{ invite: Invite }>('POST', `/api/teams/${enc(teamId)}/invites`, { role, expiresInHours, maxUses })).invite;
 	}
 
+	/** Emails an invite to each address; the server must have email set up. */
+	emailInvites(teamId: string, emails: string[], role: Role, expiresInHours: number, message?: string) {
+		return this.request<{ sent: Invite[]; failed: { email: string; error: string }[] }>('POST', `/api/teams/${enc(teamId)}/invites/email`, { emails, role, expiresInHours, message });
+	}
+
 	revokeInvite(teamId: string, code: string) {
 		return this.request('DELETE', `/api/teams/${enc(teamId)}/invites/${enc(code)}`);
 	}
@@ -202,6 +210,32 @@ export class NotesClient {
 
 	deleteNote(teamId: string, noteId: string) {
 		return this.request('DELETE', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}`);
+	}
+
+	/** Opens a note's live stream of edits and cursors (server-sent events). */
+	async liveStream(teamId: string, noteId: string, client: string, signal: AbortSignal): Promise<AsyncIterable<Uint8Array>> {
+		const response = await fetch(`${this.serverUrl.replace(/\/+$/, '')}/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live?client=${enc(client)}`, {
+			headers: { Accept: 'text/event-stream', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+			signal,
+		});
+		if (!response.ok || !response.body) {
+			let message = response.statusText;
+			try {
+				message = (await response.json() as { error?: string }).error ?? message;
+			} catch {
+				// Not JSON; keep the status text.
+			}
+			throw new NotesServerError(response.status, message);
+		}
+		return response.body;
+	}
+
+	liveEdit(teamId: string, noteId: string, client: string, revision: number, op: TextOperation) {
+		return this.request<{ revision: number }>('POST', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live/edits`, { client, revision, op });
+	}
+
+	liveSelect(teamId: string, noteId: string, client: string, revision: number, selections: [number, number][]) {
+		return this.request('POST', `/api/teams/${enc(teamId)}/notes/${enc(noteId)}/live/selections`, { client, revision, selections });
 	}
 }
 

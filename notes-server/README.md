@@ -31,6 +31,8 @@ Put it behind HTTPS (for example Caddy or nginx) before people sign in over the 
 | `ALLOW_REGISTRATION` | `true` | Set to `false` to stop new sign-ups once your team has accounts |
 | `SESSION_TTL_DAYS` | `30` | How long a sign-in lasts |
 | `APP_URL_PROTOCOL` | `nighthawk` | Protocol the invite page uses to open the desktop app |
+| `SMTP_URL` | (none) | Mail server for invite emails, such as `smtp://user:password@smtp.example.com:587` (STARTTLS) or `smtps://user:password@smtp.example.com` (TLS). Without it, Nighthawk opens the inviter's mail app with an invite link instead |
+| `MAIL_FROM` | `Nighthawk Notes <notes@PUBLIC_URL host>` | Sender of invite emails |
 
 ## Teams and roles
 
@@ -46,6 +48,14 @@ A team always keeps at least one owner. Admins invite people from the team's con
 ## Shared notes
 
 Each team's notes are Markdown files with paths like `Projects/Launch.md`. Every save carries the version it started from, and the server rejects a save that would overwrite someone else's newer change (HTTP 409); Nighthawk then offers to compare or overwrite. Clients fetch changes with `GET /api/teams/:id/notes?since=CURSOR`, which also reports deletions.
+
+### Live editing
+
+Everyone who has the same note open edits it together: each editor opens a stream of server-sent events for the note, posts its own edits and cursor positions, and gets everyone else's as they type. Edits are operational transforms (`src/textOperation.ts`): a list of numbers (positive keeps that many characters, negative deletes) and strings (inserted). The server puts edits in order, adjusts an edit made on an older revision for the ones made since, and saves the note a second after the last change, so the version history and the normal sync above keep working. A save through `PUT` while the note is open live reaches everyone as one more edit. Live sessions live in memory; if the server restarts, editors reconnect and merge what they typed meanwhile. Behind a reverse proxy, turn off response buffering for `/live` so events are not held back.
+
+## Settings sync
+
+Nighthawk can keep a person's settings, keyboard shortcuts, snippets and list of extensions the same on all their computers through this server (**Notes: Turn On Settings Sync**). Each kind is stored per account as one JSON document with a version; a write carries the version it started from and is rejected (409) if another computer wrote first, so Nighthawk merges and tries again. Merging happens in Nighthawk, not here. API keys are never synced.
 
 ## Tickets, RFCs and time
 
@@ -72,6 +82,12 @@ All endpoints take and return JSON. Send `Authorization: Bearer TOKEN` with the 
 | `POST /api/invites/:code/accept` | Join the team |
 | `GET`, `POST /api/teams/:id/notes` | List (`?since=`, `?content=1`); create `{path, content}` |
 | `GET`, `PUT`, `DELETE /api/teams/:id/notes/:noteId` | Read; update `{baseVersion, content?, path?}`; delete |
+| `GET`, `DELETE /api/me/sync` | Your synced settings, shortcuts, snippets and extensions; delete them all |
+| `PUT /api/me/sync/:resource` | Replace one (`settings`, `keybindings`, `snippets`, `extensions`): `{baseVersion, content, machine}` |
+| `GET /api/teams/:id/notes/:noteId/live?client=ID` | Live stream (server-sent events): `init`, `op`, `presence`, `join`, `leave`, `saved`, `deleted` |
+| `POST /api/teams/:id/invites/email` | Email invites `{emails, role, expiresInHours?, message?}` (admin); each works once, for its address only |
+| `POST /api/teams/:id/notes/:noteId/live/edits` | Live edit `{client, revision, op}` (editor) |
+| `POST /api/teams/:id/notes/:noteId/live/selections` | Cursor positions `{client, revision, selections: [[anchor, head]]}` |
 | `GET`, `POST /api/teams/:id/items` | List (`?since=`); create `{kind, title, body?, status?, priority?, assignees?, reviewers?, labels?, dueDate?, estimateMinutes?, checklist?}` |
 | `GET`, `PATCH`, `DELETE /api/teams/:id/items/:itemId` | Item with comments, worklogs and reviews; update (same fields, plus `baseVersion?`); delete |
 | `POST /api/teams/:id/items/:itemId/comments` | Comment `{body}` |

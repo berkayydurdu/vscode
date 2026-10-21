@@ -23,9 +23,10 @@ export interface Project {
 	deny: Rule[];
 }
 
-export function locations(): Locations {
+/** Where the agent works and reads config from: the workspace folders, or `roots` such as a background task's worktree. */
+export function locations(roots?: string[]): Locations {
 	return {
-		roots: (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath),
+		roots: roots ? [...roots] : (vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath),
 		home: os.homedir(),
 		trusted: vscode.workspace.isTrusted,
 	};
@@ -35,8 +36,8 @@ function rules(values: unknown): Rule[] {
 	return Array.isArray(values) ? values.map(v => parseRule(String(v))).filter((r): r is Rule => !!r) : [];
 }
 
-export async function loadProject(): Promise<Project> {
-	const loc = locations();
+export async function loadProject(roots?: string[]): Promise<Project> {
+	const loc = locations(roots);
 	const config = vscode.workspace.getConfiguration('nighthawk.agent');
 	const [instructions, skills, commands, agents, settingsFiles] = await Promise.all([
 		loadInstructions(loc), loadSkills(loc), loadCommands(loc), loadAgents(loc), loadSettingsFiles(loc),

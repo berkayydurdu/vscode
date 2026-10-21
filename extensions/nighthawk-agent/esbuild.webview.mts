@@ -11,6 +11,7 @@ const outDir = path.join(import.meta.dirname, 'media');
 run({
 	entryPoints: {
 		'agent': path.join(srcDir, 'main.ts'),
+		'usage': path.join(srcDir, 'usage.ts'),
 	},
 	srcDir,
 	outdir: outDir,

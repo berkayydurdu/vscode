@@ -47,6 +47,8 @@ export interface Usage {
 	outputTokens: number;
 	cacheReadTokens?: number;
 	cacheWriteTokens?: number;
+	/** US dollars, when the provider reports what the request cost (OpenRouter does). */
+	cost?: number;
 }
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'refusal' | 'other';

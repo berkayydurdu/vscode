@@ -50,6 +50,12 @@ export class TeamFileSystem implements vscode.FileSystemProvider, vscode.Disposa
 	/** Fires when the team list or any team's notes change. */
 	readonly onDidChangeTeams = this.onDidChangeTeamsEmitter.event;
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
+	/**
+	 * Notes open in a live session, with the modification time their editor
+	 * knows. The server saves those notes itself, so their time stays put
+	 * and the editor never sees them as changed on disk.
+	 */
+	private readonly live = new Map<string, { mtime: number; connected: boolean }>();
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(private readonly account: Account, private readonly index: NoteIndex) {
@@ -87,6 +93,35 @@ export class TeamFileSystem implements vscode.FileSystemProvider, vscode.Disposa
 
 	notesOf(teamId: string): NoteMeta[] {
 		return [...this.teams.get(teamId)?.notes.values() ?? []];
+	}
+
+	/** The note behind a team note URI, as last synced. */
+	noteAt(uri: vscode.Uri): (NoteMeta & { content: string }) | undefined {
+		return this.teams.get(uri.authority)?.notes.get(teamPathOf(uri));
+	}
+
+	/**
+	 * Marks a note as edited live, or not any more. While `connected`, saving
+	 * it in the editor only updates the copy here; the live session saves it
+	 * on the server.
+	 */
+	setLive(uri: vscode.Uri, live: { connected: boolean } | undefined): void {
+		const key = uri.toString();
+		if (!live) {
+			this.live.delete(key);
+			return;
+		}
+		const mtime = this.live.get(key)?.mtime ?? this.noteAt(uri)?.updatedAt ?? 0;
+		this.live.set(key, { mtime, connected: live.connected });
+	}
+
+	/** The live session saved the note on the server. */
+	liveSaved(uri: vscode.Uri, version: number, content: string, updatedAt: number): void {
+		const state = this.teams.get(uri.authority);
+		const note = state?.notes.get(teamPathOf(uri));
+		if (note && note.version < version) {
+			state!.notes.set(note.path, { ...note, version, content, updatedAt });
+		}
 	}
 
 	async reloadTeams(): Promise<void> {
@@ -174,7 +209,9 @@ export class TeamFileSystem implements vscode.FileSystemProvider, vscode.Disposa
 			}
 			state.notes.set(note.path, { ...note, content: note.content ?? '' });
 			this.indexNote(teamId, note.path, note.content ?? '');
-			events.push({ type: known ? vscode.FileChangeType.Changed : vscode.FileChangeType.Created, uri });
+			if (!this.live.has(uri.toString())) {
+				events.push({ type: known ? vscode.FileChangeType.Changed : vscode.FileChangeType.Created, uri });
+			}
 		}
 		state.cursor = result.cursor;
 		if (events.length) {
@@ -218,7 +255,8 @@ export class TeamFileSystem implements vscode.FileSystemProvider, vscode.Disposa
 		const permissions = this.canEdit(state) ? undefined : vscode.FilePermission.Readonly;
 		const note = state.notes.get(path);
 		if (note) {
-			return { type: vscode.FileType.File, ctime: note.updatedAt, mtime: note.updatedAt, size: encoder.encode(note.content).byteLength, permissions };
+			const mtime = this.live.get(uri.toString())?.mtime ?? note.updatedAt;
+			return { type: vscode.FileType.File, ctime: note.updatedAt, mtime, size: encoder.encode(note.content).byteLength, permissions };
 		}
 		if (this.isFolder(state, path)) {
 			return { type: vscode.FileType.Directory, ctime: 0, mtime: 0, size: 0, permissions };
@@ -284,6 +322,12 @@ export class TeamFileSystem implements vscode.FileSystemProvider, vscode.Disposa
 		}
 		if (!path.toLowerCase().endsWith('.md')) {
 			throw vscode.FileSystemError.NoPermissions(vscode.l10n.t('Team notes must be Markdown files ending in .md'));
+		}
+		if (existing && this.live.get(uri.toString())?.connected) {
+			// The live session already sent every change; the server saves it.
+			state.notes.set(path, { ...existing, content: text });
+			this.indexNote(uri.authority, path, text);
+			return;
 		}
 		let saved: NoteMeta;
 		try {

@@ -6,6 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createApp } from './app.ts';
+import { SmtpMailer } from './mail.ts';
 import { Store } from './store.ts';
 
 const port = Number(process.env.PORT ?? 8787);
@@ -15,18 +16,21 @@ const publicUrl = process.env.PUBLIC_URL ?? `http://${host === '0.0.0.0' ? 'loca
 
 mkdirSync(dirname(dbFile), { recursive: true });
 const store = new Store(dbFile);
+const mailer = process.env.SMTP_URL ? new SmtpMailer(process.env.SMTP_URL, process.env.MAIL_FROM ?? `Nighthawk Notes <notes@${new URL(publicUrl).hostname}>`) : undefined;
 
 const server = createApp(store, {
 	publicUrl,
 	allowRegistration: process.env.ALLOW_REGISTRATION !== 'false',
 	appUrlProtocol: process.env.APP_URL_PROTOCOL ?? 'nighthawk',
 	sessionTtlMs: Number(process.env.SESSION_TTL_DAYS ?? 30) * 24 * 3600_000,
+	mailer,
 });
 
 server.listen(port, host, () => {
 	console.log(`Nighthawk Notes server listening on http://${host}:${port}`);
 	console.log(`Public URL: ${publicUrl}`);
 	console.log(`Database: ${dbFile}`);
+	console.log(mailer ? `Invite emails: sent through ${new URL(process.env.SMTP_URL!).host}` : 'Invite emails: off (set SMTP_URL to send them)');
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -35,5 +39,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 			store.close();
 			process.exit(0);
 		});
+		// Live note streams stay open otherwise.
+		server.closeAllConnections();
 	});
 }

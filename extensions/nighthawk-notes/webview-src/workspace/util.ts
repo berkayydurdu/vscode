@@ -89,6 +89,10 @@ const ICON_PATHS: Record<string, string> = {
 	more: '<circle cx="3.5" cy="8" r=".9"/><circle cx="8" cy="8" r=".9"/><circle cx="12.5" cy="8" r=".9"/>',
 	sync: '<path d="M13 6.5A5 5 0 0 0 3.6 5M3 9.5A5 5 0 0 0 12.4 11"/><path d="M3.5 2.5V5H6M12.5 13.5V11H10"/>',
 	people: '<circle cx="6" cy="5.5" r="2.25"/><path d="M1.75 13.5c.5-2.2 2.2-3.4 4.25-3.4s3.75 1.2 4.25 3.4"/><circle cx="11.5" cy="5" r="1.75"/><path d="M11 9.75c1.7 0 3 .9 3.4 2.75"/>',
+	branch: '<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5" r="1.5"/><path d="M4.5 5v6M11.5 6.5c0 2.5-2.5 3-5.5 4.5"/>',
+	commit: '<circle cx="8" cy="8" r="2.5"/><path d="M1.5 8h4M10.5 8h4"/>',
+	sparkle: '<path d="M8 1.5l1.4 4.1 4.1 1.4-4.1 1.4L8 12.5 6.6 8.4 2.5 7l4.1-1.4z"/><path d="M12.5 11l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/>',
+	edit: '<path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/>',
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -410,4 +414,11 @@ export function excerpt(source: string, length = 140): string {
 
 export function newId(): string {
 	return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/** Short ticket prefix from a team name: "Nighthawk Core" is NC. Matches `ticketPrefix` in src/core/tickets.ts. */
+export function ticketPrefix(teamName: string): string {
+	const words = teamName.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+	const prefix = words.length > 1 ? words.map(w => w[0]).join('').slice(0, 4) : (words[0] ?? 'T').slice(0, 3);
+	return prefix.toUpperCase();
 }
