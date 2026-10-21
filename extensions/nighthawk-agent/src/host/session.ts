@@ -142,7 +142,7 @@ function agentMode(modes: AcpMode[], mode: PermissionMode): string | undefined {
 		default: /^(default|ask|normal|manual)$/i,
 		acceptEdits: /accept|auto.?edit/i,
 		plan: /plan/i,
-		bypassPermissions: /bypass|yolo|full|auto$/i,
+		bypassPermissions: /(bypass|yolo|full)|^auto$/i,
 	};
 	return modes.find(m => patterns[mode].test(m.id) || patterns[mode].test(m.name))?.id;
 }
