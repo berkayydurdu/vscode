@@ -48,15 +48,30 @@ async function waitFor<T>(what: string, check: () => T | undefined | false | Pro
 
 // --- the app under test ---------------------------------------------------------------
 
+/**
+ * Starts a command with a standard user token. CI runners run as administrator, and the user
+ * setup neither updates nor gets installed that way on a real machine.
+ */
+function runLimited(commandLine: string): void {
+	if (/\s/.test(commandLine.split(' ')[0])) {
+		throw new Error('runas needs a program path without spaces');
+	}
+	const result = spawnSync('runas', ['/trustlevel:0x20000', `"${commandLine}"`], { stdio: 'inherit', windowsVerbatimArguments: true });
+	log('runas exited with', result.status);
+}
+
 let appDir: string;
 if (platform === 'win32') {
-	log('Installing', target);
-	const installLog = path.join(os.tmpdir(), 'nighthawk-install.log');
-	const result = spawnSync(target, ['/verysilent', '/mergetasks=!runcode', `/log=${installLog}`], { stdio: 'inherit' });
-	if (result.status !== 0) {
-		throw new Error(`Installer exited with ${result.status}`);
-	}
+	// Install like a user would, without admin rights (see runLimited), so the files the
+	// update replaces are owned the same way as on a real machine.
+	const installer = path.resolve(target);
+	log('Installing', installer);
 	appDir = path.join(process.env['LOCALAPPDATA'] ?? '', 'Programs', 'Nighthawk');
+	runLimited(`${installer} /verysilent /mergetasks=!runcode`);
+	await waitFor('the installer to finish', () => {
+		const tasks = spawnSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8' }).stdout;
+		return fs.existsSync(path.join(appDir, 'unins000.exe')) && !/VSCodeSetup/i.test(tasks);
+	}, 10 * 60_000);
 } else {
 	appDir = target;
 }
@@ -124,9 +139,8 @@ fs.writeFileSync(path.join(userDataDir, 'User', 'settings.json'), JSON.stringify
 const appArgs = [`--user-data-dir=${userDataDir}`, '--password-store=basic', '--disable-workspace-trust'];
 
 /**
- * Starts the app and returns its workbench page. On Windows the user setup refuses to update
- * while running as administrator, which CI runners are, so the app is started through
- * `runas /trustlevel` with a standard user token and driven over the DevTools protocol.
+ * Starts the app and returns its workbench page. On Windows it starts with a standard user
+ * token (the user setup refuses to update as administrator) and is driven over the DevTools protocol.
  */
 async function launch(): Promise<{ window: Page; close: () => Promise<void> }> {
 	if (platform !== 'win32') {
@@ -141,9 +155,6 @@ async function launch(): Promise<{ window: Page; close: () => Promise<void> }> {
 
 	const debugPort = 9333;
 	const commandLine = [path.join(appDir, 'Nighthawk.exe'), `--remote-debugging-port=${debugPort}`, ...appArgs].join(' ');
-	if (/\s/.test(appDir) || /\s/.test(userDataDir)) {
-		throw new Error('runas needs paths without spaces');
-	}
 	const connect = async () => {
 		try {
 			return await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
@@ -151,17 +162,8 @@ async function launch(): Promise<{ window: Page; close: () => Promise<void> }> {
 			return undefined;
 		}
 	};
-	const runas = spawnSync('runas', ['/trustlevel:0x20000', `"${commandLine}"`], { stdio: 'inherit', windowsVerbatimArguments: true });
-	log('runas exited with', runas.status);
-	let browser = await waitFor('the app to accept a debugger', connect, 60_000).catch(() => undefined);
-	if (!browser) {
-		// Fall back to a scheduled task, which also runs with a standard user token.
-		log('Starting through a scheduled task instead');
-		spawnSync('schtasks', ['/create', '/f', '/tn', 'NighthawkUpdateTest', '/sc', 'once', '/st', '23:59', '/rl', 'LIMITED', '/tr', commandLine], { stdio: 'inherit' });
-		spawnSync('schtasks', ['/run', '/tn', 'NighthawkUpdateTest'], { stdio: 'inherit' });
-		browser = await waitFor('the app to accept a debugger', connect, 120_000);
-	}
-	const cdp = browser;
+	runLimited(commandLine);
+	const cdp = await waitFor('the app to accept a debugger', connect, 120_000);
 	const window = await waitFor('the workbench window', () => cdp.contexts().flatMap(c => c.pages()).find(p => p.url().includes('workbench')), 120_000);
 	return { window, close: () => cdp.close() };
 }
@@ -246,6 +248,16 @@ try {
 	console.error(error);
 	console.error('--- requests ---\n' + requests.join('\n'));
 	console.error('--- main.log ---\n' + mainLog());
+	if (platform === 'win32') {
+		console.error('--- processes running from the install folder ---');
+		const filter = `$_.ExecutablePath -like '${appDir}*'`;
+		spawnSync('powershell', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process | Where-Object { ${filter} } | Format-List ProcessId,ParentProcessId,CommandLine`], { stdio: 'inherit' });
+		const tmp = os.tmpdir();
+		const installerLogs = fs.readdirSync(tmp).filter(name => /^Setup Log|inno.updater/i.test(name));
+		for (const name of installerLogs) {
+			console.error(`--- ${name} (last 80 lines) ---\n` + fs.readFileSync(path.join(tmp, name), 'utf8').split(/\r?\n/).slice(-80).join('\n'));
+		}
+	}
 	await window.screenshot({ path: path.join(screenshotDir, 'failure.png') }).catch(() => { });
 	process.exitCode = 1;
 } finally {
