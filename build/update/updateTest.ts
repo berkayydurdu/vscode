@@ -22,7 +22,7 @@ import http from 'http';
 import type { AddressInfo } from 'net';
 import os from 'os';
 import path from 'path';
-import { _electron } from 'playwright-core';
+import { _electron, chromium, type Page } from 'playwright-core';
 
 const [platform, target, screenshotDir] = process.argv.slice(2);
 if (!['win32', 'linux'].includes(platform) || !target || !screenshotDir) {
@@ -34,7 +34,7 @@ fs.mkdirSync(screenshotDir, { recursive: true });
 const log = (...args: unknown[]) => console.log(`[${new Date().toISOString()}]`, ...args);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function waitFor<T>(what: string, check: () => T | Promise<T>, timeoutMs: number): Promise<T> {
+async function waitFor<T>(what: string, check: () => T | undefined | false | Promise<T | undefined | false>, timeoutMs: number): Promise<T> {
 	const end = Date.now() + timeoutMs;
 	while (Date.now() < end) {
 		const value = await check();
@@ -121,15 +121,53 @@ fs.writeFileSync(path.join(userDataDir, 'User', 'settings.json'), JSON.stringify
 	'security.workspace.trust.enabled': false,
 }));
 
-const executablePath = platform === 'win32' ? path.join(appDir, 'Nighthawk.exe') : path.join(appDir, 'nighthawk');
-log('Launching', executablePath);
-const app = await _electron.launch({
-	executablePath,
-	args: [`--user-data-dir=${userDataDir}`, '--password-store=basic', '--disable-workspace-trust'],
-	env: { ...process.env, VSCODE_SKIP_PRELAUNCH: '1' },
-	timeout: 120_000,
-});
-const window = await app.firstWindow({ timeout: 120_000 });
+const appArgs = [`--user-data-dir=${userDataDir}`, '--password-store=basic', '--disable-workspace-trust'];
+
+/**
+ * Starts the app and returns its workbench page. On Windows the user setup refuses to update
+ * while running as administrator, which CI runners are, so the app is started through
+ * `runas /trustlevel` with a standard user token and driven over the DevTools protocol.
+ */
+async function launch(): Promise<{ window: Page; close: () => Promise<void> }> {
+	if (platform !== 'win32') {
+		const app = await _electron.launch({
+			executablePath: path.join(appDir, 'nighthawk'),
+			args: appArgs,
+			env: { ...process.env, VSCODE_SKIP_PRELAUNCH: '1' },
+			timeout: 120_000,
+		});
+		return { window: await app.firstWindow({ timeout: 120_000 }), close: () => app.close() };
+	}
+
+	const debugPort = 9333;
+	const commandLine = [path.join(appDir, 'Nighthawk.exe'), `--remote-debugging-port=${debugPort}`, ...appArgs].join(' ');
+	if (/\s/.test(appDir) || /\s/.test(userDataDir)) {
+		throw new Error('runas needs paths without spaces');
+	}
+	const connect = async () => {
+		try {
+			return await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
+		} catch {
+			return undefined;
+		}
+	};
+	const runas = spawnSync('runas', ['/trustlevel:0x20000', `"${commandLine}"`], { stdio: 'inherit', windowsVerbatimArguments: true });
+	log('runas exited with', runas.status);
+	let browser = await waitFor('the app to accept a debugger', connect, 60_000).catch(() => undefined);
+	if (!browser) {
+		// Fall back to a scheduled task, which also runs with a standard user token.
+		log('Starting through a scheduled task instead');
+		spawnSync('schtasks', ['/create', '/f', '/tn', 'NighthawkUpdateTest', '/sc', 'once', '/st', '23:59', '/rl', 'LIMITED', '/tr', commandLine], { stdio: 'inherit' });
+		spawnSync('schtasks', ['/run', '/tn', 'NighthawkUpdateTest'], { stdio: 'inherit' });
+		browser = await waitFor('the app to accept a debugger', connect, 120_000);
+	}
+	const cdp = browser;
+	const window = await waitFor('the workbench window', () => cdp.contexts().flatMap(c => c.pages()).find(p => p.url().includes('workbench')), 120_000);
+	return { window, close: () => cdp.close() };
+}
+
+log('Launching', appDir);
+const { window, close } = await launch();
 await window.waitForSelector('.monaco-workbench', { timeout: 120_000 });
 log('Workbench is up');
 
@@ -194,10 +232,8 @@ try {
 		}, 10 * 60_000);
 		log('Windows: new files in place');
 
-		await waitFor('the app to start again', () => {
-			const tasks = spawnSync('tasklist', ['/FI', 'IMAGENAME eq Nighthawk.exe', '/FO', 'CSV', '/NH'], { encoding: 'utf8' }).stdout;
-			return tasks.includes('Nighthawk.exe');
-		}, 5 * 60_000);
+		// The relaunched app keeps --user-data-dir, so it starts a second log session there.
+		await waitFor('the app to start again', () => fs.readdirSync(path.join(userDataDir, 'logs')).length > 1, 5 * 60_000);
 		log('Windows: app restarted after the update');
 	}
 
@@ -213,7 +249,7 @@ try {
 	await window.screenshot({ path: path.join(screenshotDir, 'failure.png') }).catch(() => { });
 	process.exitCode = 1;
 } finally {
-	await app.close().catch(() => { });
+	await close().catch(() => { });
 	if (platform === 'win32') {
 		spawn('taskkill', ['/F', '/IM', 'Nighthawk.exe'], { stdio: 'ignore' });
 	}
