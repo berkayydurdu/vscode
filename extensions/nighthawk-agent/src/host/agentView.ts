@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { HostMessage, PageMessage } from '../core/protocol';
 import { resolvePath } from '../core/workspace';
-import { Session, type Services } from './session';
+import { Session, type Services, type SessionOptions } from './session';
 
 const DIFF_SCHEME = 'nighthawk-agent-diff';
 
@@ -109,8 +109,8 @@ export class AgentController implements vscode.Disposable {
 		return { ...this.host, reveal: this.reveal, isVisible: this.isVisible };
 	}
 
-	private newSession(data?: ConstructorParameters<typeof Session>[1]): Session {
-		const session = new Session(this.services(), data);
+	private newSession(data?: ConstructorParameters<typeof Session>[1], options?: SessionOptions): Session {
+		const session = new Session(this.services(), data, options);
 		this.attach(session);
 		return session;
 	}
@@ -136,33 +136,42 @@ export class AgentController implements vscode.Disposable {
 		}
 	}
 
-	startNew(): void {
-		if (this.session.isEmpty && !this.session.running) {
+	/** Starts a conversation, with an external agent such as Claude Code when `options.external` names one. */
+	startNew(options?: SessionOptions): void {
+		if (this.session.isEmpty && !this.session.running && this.session.external?.agent === options?.external) {
 			this.post({ type: 'focus' });
 			return;
 		}
 		const old = this.session;
-		this.newSession();
+		this.newSession(undefined, options);
 		this.release(old);
+		this.post({ type: 'focus' });
 	}
 
 	async open(id: string): Promise<void> {
+		if (!await this.openIfSaved(id)) {
+			vscode.window.showWarningMessage(vscode.l10n.t('That conversation could not be loaded.'));
+		}
+	}
+
+	/** Shows the conversation; false when it is neither running nor saved. */
+	async openIfSaved(id: string): Promise<boolean> {
 		if (id === this.session.id) {
-			return;
+			return true;
 		}
 		const live = this.host.liveSession?.(id);
 		if (live) {
 			this.show(live);
-			return;
+			return true;
 		}
 		const data = await this.host.store.load(id);
 		if (!data) {
-			vscode.window.showWarningMessage(vscode.l10n.t('That conversation could not be loaded.'));
-			return;
+			return false;
 		}
 		const old = this.session;
 		this.newSession(data);
 		this.release(old);
+		return true;
 	}
 
 	prefill(text: string, append = true): void {
@@ -217,7 +226,11 @@ export class AgentController implements vscode.Disposable {
 				session.setMode(message.mode);
 				break;
 			case 'pickModel':
-				await this.host.endpoints.pickModel();
+				if (session.external) {
+					await vscode.commands.executeCommand('nighthawk.agent.external.start');
+				} else {
+					await this.host.endpoints.pickModel();
+				}
 				session.postState();
 				break;
 			case 'newSession':
@@ -285,6 +298,10 @@ export class AgentController implements vscode.Disposable {
 			case 'undoRestore':
 				await this.session.undoRestore();
 				break;
+			default:
+				if (action.startsWith('acp:')) {
+					await this.session.externalAction(action.slice(4));
+				}
 		}
 		this.session.postState();
 	}

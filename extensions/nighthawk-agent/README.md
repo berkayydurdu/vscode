@@ -66,7 +66,35 @@ The agent reads these from the workspace (only in trusted workspaces) and from `
 
 ## Slash commands
 
-`/clear`, `/compact [focus]`, `/init`, `/review`, `/model`, `/plan`, `/memory`, `/skills`, `/agents`, `/mcp`, `/context` and `/help`, plus your own commands and skills.
+`/clear`, `/compact [focus]`, `/init`, `/review`, `/model`, `/plan`, `/spec <what to build>`, `/memory`, `/memories`, `/skills`, `/agents`, `/mcp`, `/context` and `/help`, plus your own commands and skills.
+
+## Spec mode
+
+For bigger features, `/spec <what to build>` or **Agent: New Spec...** has the agent plan before it codes, in three documents under `.nighthawk/specs/<name>/` that you approve one at a time:
+
+1. **requirements.md**: user stories with acceptance criteria ("WHEN ... THEN the system SHALL ...").
+2. **design.md**: the architecture, components, files, data and error handling, based on the code as it is.
+3. **tasks.md**: a numbered checklist of small coding steps that build the design.
+
+Buttons at the top of each document approve it (and have the agent write the next one) or ask for changes; you can also edit the documents yourself before approving. Until the tasks are approved, the agent can only change files in the spec's folder. Then each open task in tasks.md gets a **Start Task** button, and **Run All Open Tasks** works through them in order; the agent ticks off each task when it is done. **Agent: Open Spec...** lists the specs and how far each one got. Specs are plain Markdown, so you can commit them with the code.
+
+## Memories
+
+The agent remembers what it learns across conversations: your preferences ("prefers pnpm", "wants short answers") for every project, and facts about this project ("tests run with `npm run test:unit`") for this workspace. It saves one with its Memory tool when you tell it something worth keeping, or when it finds out something a later conversation would need, and a card in the conversation shows what it saved. Every conversation starts with the memories in its instructions, and the agent updates or deletes ones that turn out wrong.
+
+**Agent: Show Memories...** or `/memories` lists them to edit, forget or add one by hand. Memories are kept in Nighthawk's storage on your computer, never in the project, and things that look like keys or passwords are never saved. Turn them off with `nighthawk.agent.memories`.
+
+## External agents
+
+The agent panel can also run other coding agents through the [Agent Client Protocol](https://agentclientprotocol.com): **Agent: New Conversation With...**, or click the model name in a conversation, then pick **Claude Code**, **Gemini CLI** or **Codex**. The conversation looks and works like one with the Nighthawk Agent: its messages, thinking, plan and tool calls show as cards, edits as diffs, and it asks for approval in the panel. File reads and writes go through the editor, so it sees unsaved changes, and every message gets a checkpoint you can restore. The permission modes switch the agent's own modes, and its own slash commands appear in the `/` menu.
+
+These agents run as programs on your computer through `npx`, so they need [Node.js](https://nodejs.org), and each uses its own sign-in or API key (for example a Claude subscription or `ANTHROPIC_API_KEY`); Nighthawk does not count their usage. Add any other agent that speaks the protocol in `nighthawk.agent.externalAgents`:
+
+```json
+"nighthawk.agent.externalAgents": [
+	{ "name": "My Agent", "command": "my-agent", "args": ["--acp"], "env": { "MY_AGENT_KEY": "..." } }
+]
+```
 
 ## Conversations
 
@@ -100,6 +128,8 @@ While you type, the model suggests what comes next as grey text: the rest of a l
 - A request goes out once typing pauses for 300 ms (`nighthawk.autocomplete.delay`). Typing the start of a suggestion keeps showing the rest without asking again.
 - The **Autocomplete** item in the status bar shows when a suggestion is on its way or the last one failed. Click it to turn autocomplete off, everywhere or for the current language, or to change its model.
 - It is off for plain text, Markdown and the commit message box by default (`nighthawk.autocomplete.disabledLanguages`). Files that usually hold secrets, such as `.env` and key files, are never sent.
+
+**Next edits.** Where there is nothing to complete at the cursor, autocomplete predicts your next edit from your recent ones in the file: after you rename a parameter, it offers the same rename at its next use; after you add an argument, the next call that needs it. The editor marks the place, `Tab` jumps there and `Tab` again accepts, so a rename across a function is a few presses of `Tab`. `Escape` turns a suggestion down, and it is not offered again. Turn next edits off from the Autocomplete menu or with `nighthawk.autocomplete.nextEdits`; they are counted on the usage page under Next edits.
 
 Autocomplete uses its own model when **AI: Select Model for Autocomplete...** (`nighthawk.autocomplete.model`) sets one, else the inline edit model, else the agent's. Every pause in typing can send a request, so pick a small, fast model; a local model through Ollama or LM Studio costs nothing. Requests are counted on the usage page under Autocomplete.
 

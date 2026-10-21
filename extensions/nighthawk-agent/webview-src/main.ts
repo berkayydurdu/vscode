@@ -524,7 +524,7 @@ class App {
 			item.approval?.outside && h('div', { class: 'approval-warning' }, icon('warning', 14), t('This touches files outside the workspace.')),
 			h('div', { class: 'approval-actions' },
 				h('button', { class: 'button primary', onclick: () => post({ type: 'approve', id: item.id, decision: 'allow' }) }, t('Allow')),
-				h('button', { class: 'button', onclick: () => post({ type: 'approve', id: item.id, decision: 'always' }) }, t('Always allow {0}', item.approval?.always ?? '')),
+				!!item.approval?.always && h('button', { class: 'button', onclick: () => post({ type: 'approve', id: item.id, decision: 'always' }) }, t('Always allow {0}', item.approval.always)),
 				h('button', { class: 'button subtle', onclick: () => post({ type: 'approve', id: item.id, decision: 'deny' }) }, t('Deny'))),
 			feedback);
 	}

@@ -5,6 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
+import { externalAgents } from './core/acp';
 import type { PermissionMode } from './core/permissions';
 import { AgentViewProvider, DiffContentProvider, openAgentPanel, type ControllerHost } from './host/agentView';
 import { Autocomplete } from './host/autocomplete';
@@ -17,7 +18,9 @@ import { branchReviewPrompt } from './core/commit';
 import { Checkpoints } from './host/checkpoints';
 import { CodebaseIndexer } from './host/codeIndex';
 import { McpManager } from './host/mcpManager';
+import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
+import { Specs } from './host/specs';
 import { TerminalAssistant } from './host/terminal';
 import { UsageMeter } from './host/usage';
 import { UsagePanel } from './host/usageView';
@@ -33,12 +36,14 @@ export function activate(context: vscode.ExtensionContext): void {
 	const diffs = DiffContentProvider.register();
 	const usage = new UsageMeter(context, () => !!endpoints.current());
 	const codeIndex = new CodebaseIndexer(context, endpoints, usage, workspaceKey());
+	const memories = new Memories(context.globalStorageUri, workspaceKey());
 	const host: ControllerHost = {
 		context,
 		endpoints,
 		mcp,
 		usage,
 		codeIndex,
+		memories,
 		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
@@ -53,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	});
 	const inlineEdit = new InlineEditController(context, endpoints, usage);
 	const autocomplete = new Autocomplete(endpoints, usage, () => inlineEdit.model());
+	const specs = new Specs(() => view.show());
 	const task = (handler: (task: BackgroundTask) => unknown) => (task?: BackgroundTask) => task?.id ? handler(task) : undefined;
 
 	const status = vscode.window.createStatusBarItem('nighthawk.agent.model', vscode.StatusBarAlignment.Right, 100);
@@ -67,7 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, background, terminal, inlineEdit, autocomplete, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, memories, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -144,6 +150,32 @@ export function activate(context: vscode.ExtensionContext): void {
 				: vscode.l10n.t('Review this branch against {0} before it is pushed.', target.base);
 			await controller.session.sendTask(shown, branchReviewPrompt(target.base, target.branch));
 		}),
+		vscode.commands.registerCommand('nighthawk.agent.external.start', async (name?: unknown) => {
+			const agents = externalAgents(vscode.workspace.getConfiguration('nighthawk.agent').get('externalAgents'));
+			type Item = vscode.QuickPickItem & { agent?: string; own?: boolean; add?: boolean };
+			const pick: Item | undefined = typeof name === 'string' ? { label: name, agent: name } : await vscode.window.showQuickPick<Item>([
+				{ label: `$(sparkle) ${vscode.l10n.t('Nighthawk Agent')}`, description: endpoints.current()?.model, detail: vscode.l10n.t('The built-in agent, on your model endpoints'), own: true },
+				{ label: vscode.l10n.t('External agents'), kind: vscode.QuickPickItemKind.Separator },
+				...agents.map<Item>(a => ({ label: `$(hubot) ${a.name}`, description: [a.command, ...a.args ?? []].join(' '), detail: a.description, agent: a.name })),
+				{ label: `$(add) ${vscode.l10n.t('Add Your Own Agent...')}`, detail: vscode.l10n.t('Any agent that speaks the Agent Client Protocol'), add: true },
+			], { title: vscode.l10n.t('Start a Conversation With'), matchOnDescription: true });
+			if (!pick) {
+				return;
+			}
+			if (pick.add) {
+				await vscode.commands.executeCommand('workbench.action.openSettingsJson', { revealSetting: { key: 'nighthawk.agent.externalAgents' } });
+				return;
+			}
+			const controller = await view.show();
+			controller.startNew(pick.agent ? { external: pick.agent } : undefined);
+		}),
+		vscode.commands.registerCommand('nighthawk.agent.memories', () => memories.manage()),
+		vscode.commands.registerCommand('nighthawk.spec.new', (request?: unknown) => specs.create(typeof request === 'string' ? request : undefined)),
+		vscode.commands.registerCommand('nighthawk.spec.open', () => specs.open()),
+		vscode.commands.registerCommand('nighthawk.spec.approve', (uri?: vscode.Uri) => uri && specs.approve(uri)),
+		vscode.commands.registerCommand('nighthawk.spec.revise', (uri?: vscode.Uri) => uri && specs.revise(uri)),
+		vscode.commands.registerCommand('nighthawk.spec.runTask', (uri?: vscode.Uri, line?: number) => uri && typeof line === 'number' && specs.runTask(uri, line)),
+		vscode.commands.registerCommand('nighthawk.spec.runAll', (uri?: vscode.Uri) => uri && specs.runTask(uri)),
 		vscode.commands.registerCommand('nighthawk.inlineEdit.start', () => inlineEdit.start()),
 		vscode.commands.registerCommand('nighthawk.inlineEdit.accept', (uri?: vscode.Uri) => inlineEdit.acceptAll(uri)),
 		vscode.commands.registerCommand('nighthawk.inlineEdit.reject', (uri?: vscode.Uri) => inlineEdit.rejectAll(uri)),

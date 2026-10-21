@@ -11,7 +11,8 @@
   "enabledApiProposals": [
     "contribSourceControlInputBoxMenu",
     "terminalQuickFixProvider",
-    "editorInsets"
+    "editorInsets",
+    "inlineCompletionsAdditions"
   ],
   "categories": [
     "AI",
@@ -252,6 +253,52 @@
             "default": "",
             "markdownDescription": "%config.agent.shell%"
           },
+          "nighthawk.agent.externalAgents": {
+            "type": "array",
+            "scope": "application",
+            "default": [],
+            "markdownDescription": "%config.agent.externalAgents%",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "command"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "%config.agent.externalAgents.name%"
+                },
+                "command": {
+                  "type": "string",
+                  "description": "%config.agent.externalAgents.command%"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "%config.agent.externalAgents.args%"
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "description": "%config.agent.externalAgents.env%"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "nighthawk.agent.memories": {
+            "type": "boolean",
+            "default": true,
+            "scope": "application",
+            "markdownDescription": "%config.agent.memories%"
+          },
           "nighthawk.agent.systemPrompt": {
             "type": "string",
             "default": "",
@@ -303,6 +350,11 @@
             "minimum": 0,
             "maximum": 5000,
             "markdownDescription": "%config.autocomplete.delay%"
+          },
+          "nighthawk.autocomplete.nextEdits": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.autocomplete.nextEdits%"
           },
           "nighthawk.autocomplete.disabledLanguages": {
             "type": "array",
@@ -528,6 +580,49 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "nighthawk.agent.external.start",
+        "title": "%command.external.start%",
+        "category": "%category.agent%",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "nighthawk.agent.memories",
+        "title": "%command.memories%",
+        "category": "%category.agent%",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "nighthawk.spec.new",
+        "title": "%command.spec.new%",
+        "category": "%category.agent%",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "nighthawk.spec.open",
+        "title": "%command.spec.open%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.spec.approve",
+        "title": "%command.spec.approve%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.spec.revise",
+        "title": "%command.spec.revise%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.spec.runTask",
+        "title": "%command.spec.runTask%",
+        "category": "%category.agent%"
+      },
+      {
+        "command": "nighthawk.spec.runAll",
+        "title": "%command.spec.runAll%",
+        "category": "%category.agent%"
+      },
+      {
         "command": "nighthawk.agent.reviewBranch",
         "title": "%command.reviewBranch%",
         "category": "%category.agent%",
@@ -622,6 +717,22 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "nighthawk.spec.approve",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.spec.revise",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.spec.runTask",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.spec.runAll",
+          "when": "false"
+        },
         {
           "command": "nighthawk.agent.background.open",
           "when": "false"
