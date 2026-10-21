@@ -123,7 +123,7 @@ export function costOf(usage: Usage, price: Price | undefined): number | undefin
 }
 
 /** What a request was for, shown as "Used for" on the usage page. */
-export type UsageFeature = 'agent' | 'commit' | 'terminal' | 'inline';
+export type UsageFeature = 'agent' | 'commit' | 'terminal' | 'inline' | 'autocomplete';
 
 /** One model request, as stored in the monthly usage log. */
 export interface UsageRecord {

@@ -79,8 +79,12 @@ export function openAIBody(endpoint: Endpoint, model: string, request: ChatReque
 	if (maxTokens) {
 		body.max_tokens = maxTokens;
 	}
-	if (request.effort && /^(o\d|gpt-5)/.test(model.replace(/^.*\//, ''))) {
+	const reasoning = /^(o\d|gpt-5)/.test(model.replace(/^.*\//, ''));
+	if (request.effort && reasoning) {
 		body.reasoning_effort = request.effort === 'xhigh' || request.effort === 'max' ? 'high' : request.effort;
+	}
+	if (request.stop?.length && !reasoning) {
+		body.stop = request.stop;
 	}
 	return body;
 }
