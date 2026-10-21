@@ -177,7 +177,7 @@ try {
 		await window.screenshot({ path: path.join(screenshotDir, 'update-win32-ready.png') });
 		log('Windows: update ready, restarting');
 
-		await runCommand('Restart to Update');
+		await runCommand('Nighthawk: Restart to Update');
 		await waitFor('the app to quit', async () => {
 			try {
 				await window.title();

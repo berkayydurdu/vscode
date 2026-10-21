@@ -419,6 +419,9 @@ export class UpdateTooltip extends Disposable {
 		this.actionButton.dataset.commandId = commandId;
 		this.actionButton.style.display = '';
 		this.actionButton.tabIndex = 0;
+		// Without release notes the bar holds only this button, kept on the right.
+		this.actionButton.style.marginLeft = 'auto';
+		this.buttonBar.style.display = '';
 	}
 
 	private renderMessage(message: string, icon?: ThemeIcon) {
