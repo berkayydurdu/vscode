@@ -744,10 +744,43 @@
         "command": "nighthawk.preview.reload",
         "title": "%command.preview.reload%",
         "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.multibuffer.search",
+        "title": "%command.multibuffer.search%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.references",
+        "title": "%command.multibuffer.references%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.problems",
+        "title": "%command.multibuffer.problems%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.openSource",
+        "title": "%command.multibuffer.openSource%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.reload",
+        "title": "%command.multibuffer.reload%",
+        "category": "%category.multibuffer%"
       }
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "nighthawk.multibuffer.openSource",
+          "when": "resourceScheme == nighthawk-multibuffer"
+        },
+        {
+          "command": "nighthawk.multibuffer.reload",
+          "when": "resourceScheme == nighthawk-multibuffer"
+        },
         {
           "command": "nighthawk.spec.approve",
           "when": "false"
@@ -937,6 +970,11 @@
       ],
       "editor/context": [
         {
+          "command": "nighthawk.multibuffer.references",
+          "when": "editorHasReferenceProvider",
+          "group": "navigation@99"
+        },
+        {
           "command": "nighthawk.inlineEdit.start",
           "when": "!editorReadonly",
           "group": "nighthawk@0"
@@ -952,6 +990,11 @@
       ]
     },
     "keybindings": [
+      {
+        "command": "nighthawk.multibuffer.openSource",
+        "key": "alt+enter",
+        "when": "editorTextFocus && resourceScheme == nighthawk-multibuffer"
+      },
       {
         "command": "nighthawk.agent.open",
         "key": "ctrl+escape",

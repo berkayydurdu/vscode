@@ -19,6 +19,9 @@ export const walkThroughSnippet = 'walkThroughSnippet';
 export const vscodeNotebookCell = 'vscode-notebook-cell';
 export const officeScript = 'office-script';
 
+/** Nighthawk's multibuffers: excerpts of many files in one document, which is never valid code as a whole */
+export const nighthawkMultibuffer = 'nighthawk-multibuffer';
+
 /** Used for code blocks in chat by vs code core */
 export const chatCodeBlock = 'vscode-chat-code-block';
 
@@ -52,6 +55,7 @@ export const disabledSchemes = new Set([
 	github,
 	azurerepos,
 	chatEditingTextModel,
+	nighthawkMultibuffer,
 ]);
 
 export function isOfScheme(uri: vscode.Uri, ...schemes: string[]): boolean {

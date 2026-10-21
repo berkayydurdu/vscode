@@ -160,6 +160,15 @@ Nighthawk keeps an index of the workspace's code on your computer, so the agent 
 - Console errors on the page are counted in the toolbar; click the count to send them to the agent as `@preview:errors`.
 - The page keeps live reload, because the preview passes its WebSocket through. It runs through a small proxy on 127.0.0.1 that only talks to that one dev server and adds the picker script to its pages.
 
+## Multibuffers
+
+A multibuffer shows excerpts from many files in one editable tab, each under a header naming its file and lines. Saving writes every changed excerpt back into its file. Because it is one document, multiple cursors, find and replace, and inline edit (Ctrl+I) work across all the files at once.
+
+- **Multibuffer: Search into Multibuffer...** puts every match of a search in one tab (wrap the text in slashes for a regular expression, like `/use\w+/`).
+- **Multibuffer: Open References in Multibuffer** (also in the editor's context menu) shows every reference to the symbol at the cursor; **Multibuffer: Open Problems in Multibuffer** shows every error and warning.
+- **Open File** above a header, or Alt+Enter, opens the file at that line.
+- If a file changed since the multibuffer read it, saving stops and says which; **Multibuffer: Reload Files** reads them again.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
