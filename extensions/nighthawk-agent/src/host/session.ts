@@ -17,9 +17,11 @@ import { findShell, shellFromPath, type Shell } from '../core/shell';
 import { expandCommand, readSkillBody } from '../core/skills';
 import { bashDescription, BUILTIN_TOOLS, SessionState, skillDescription, taskDescription, type Tool, type ToolContext, type ToolResult } from '../core/tools';
 import type { Message, ModelStream, Usage } from '../core/types';
+import { timeAgo } from '../core/checkpoints';
 import { displayPath, resolvePath } from '../core/workspace';
 import { diagnosticsTool, EditorWorkspace } from './editorWorkspace';
 import type { Endpoints } from './endpoints';
+import type { Checkpoints, RestoreChoice } from './checkpoints';
 import type { McpManager } from './mcpManager';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
@@ -30,6 +32,7 @@ export interface Services {
 	mcp: McpManager;
 	store: SessionStore;
 	usage: UsageMeter;
+	checkpoints: Checkpoints;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -48,6 +51,8 @@ export interface SessionData {
 	cost?: number;
 	/** Folders the agent works in instead of the workspace folders, such as a background task's worktree. */
 	roots?: string[];
+	/** Where each user message starts in `messages` and `items`, so the conversation can go back to it. */
+	turns?: Omit<Turn, 'files'>[];
 }
 
 export interface SessionOptions {
@@ -61,6 +66,7 @@ interface Turn {
 	messageIndex: number;
 	itemIndex: number;
 	text: string;
+	/** Files the agent changed, for going back when there is no checkpoint. Not saved. */
 	files: Map<string, string | undefined>;
 }
 
@@ -154,13 +160,15 @@ export class Session implements vscode.Disposable {
 		this.todos = data?.todos ?? [];
 		this.cost = data?.cost ?? 0;
 		this.started = !!data?.messages.length;
+		this.turns = (data?.turns ?? []).map(turn => ({ ...turn, files: new Map() }));
+		const rewindable = new Set(this.turns.map(t => t.itemId));
 		// A restored conversation cannot resume calls that were waiting.
 		this.items = (data?.items ?? []).map(item => {
 			if (item.kind === 'tool' && (item.status === 'running' || item.status === 'awaiting')) {
 				return { ...item, status: 'error' as const, approval: undefined, summary: vscode.l10n.t('interrupted') };
 			}
 			if (item.kind === 'user') {
-				return { ...item, canRewind: false, queued: false };
+				return { ...item, canRewind: rewindable.has(item.id), queued: false };
 			}
 			if (item.kind === 'plan' && item.status === 'awaiting') {
 				return { ...item, status: 'rejected' as const };
@@ -168,6 +176,7 @@ export class Session implements vscode.Disposable {
 			return item;
 		});
 		this.workspace = new EditorWorkspace(locations(this.roots).roots);
+		this.services.checkpoints.warm(this.workspace.roots);
 		// Replaced by the detected shell before the first turn runs.
 		this.shell = shellFromPath(process.platform === 'win32' ? 'powershell.exe' : '/bin/sh');
 		this.refreshCommands();
@@ -304,9 +313,14 @@ export class Session implements vscode.Disposable {
 
 	/** Adds a user message and runs the agent. `shown` is what the transcript shows. */
 	private async startTurn(shown: string, prompt: string): Promise<void> {
-		const item = { kind: 'user' as const, id: newId('u'), text: shown, canRewind: true };
+		const item: Extract<TranscriptItem, { kind: 'user' }> = { kind: 'user', id: newId('u'), text: shown, canRewind: true };
 		this.turns.push({ itemId: item.id, messageIndex: this.messages.length, itemIndex: this.items.length, text: shown, files: new Map() });
 		this.upsert(item);
+		// Saved before anything runs, hand edits since the last message included.
+		const checkpoint = await this.services.checkpoints.create(this.workspace.roots, shown);
+		if (checkpoint) {
+			this.update<'user'>(item.id, { checkpoint });
+		}
 		if (!this.title) {
 			this.title = shown.replace(/\s+/g, ' ').slice(0, 80);
 		}
@@ -935,15 +949,50 @@ export class Session implements vscode.Disposable {
 		}
 	}
 
-	/** Restores files changed since a message and removes it and everything after. */
+	/**
+	 * Goes back to before a message: the files to its checkpoint, the
+	 * conversation to before it, or both.
+	 */
 	async rewind(itemId: string): Promise<void> {
 		if (this.running) {
 			return;
 		}
-		const index = this.turns.findIndex(t => t.itemId === itemId);
-		if (index < 0) {
+		const item = this.items.find(i => i.id === itemId);
+		if (item?.kind !== 'user') {
 			return;
 		}
+		const index = this.turns.findIndex(t => t.itemId === itemId);
+		let choice: RestoreChoice | undefined;
+		if (item.checkpoint) {
+			choice = await this.services.checkpoints.confirmAndRestore(item.checkpoint, { what: clip(item.text.replace(/\s+/g, ' '), 120), conversation: index >= 0 });
+		} else if (index >= 0) {
+			choice = await this.rewindAgentEdits(index);
+		}
+		if (!choice) {
+			return;
+		}
+		if (choice !== 'code' && index >= 0) {
+			const turn = this.turns[index];
+			this.messages.length = turn.messageIndex;
+			this.items = this.items.slice(0, turn.itemIndex);
+			this.turns = this.turns.slice(0, index);
+			this.state.readFiles.clear();
+			this.usage = undefined;
+			this.emitter.fire({ type: 'items', items: this.items });
+			this.emitter.fire({ type: 'prefill', text: turn.text });
+		}
+		if (choice !== 'conversation' && item.checkpoint) {
+			// The agent must read files again before editing them.
+			this.state.readFiles.clear();
+			const time = new Date(item.checkpoint.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+			this.notice('info', vscode.l10n.t('Your files are back to how they were at {0} ({1}).', time, timeAgo(item.checkpoint.at)), [{ label: vscode.l10n.t('Undo Restore'), action: 'undoRestore' }]);
+		}
+		this.postState();
+		await this.save();
+	}
+
+	/** Without a checkpoint, puts back only the files the agent changed since the turn. */
+	private async rewindAgentEdits(index: number): Promise<RestoreChoice | undefined> {
 		const changed = new Set<string>();
 		for (const turn of this.turns.slice(index)) {
 			turn.files.forEach((_, file) => changed.add(file));
@@ -955,7 +1004,7 @@ export class Session implements vscode.Disposable {
 			: vscode.l10n.t('No files were changed since then.');
 		const answer = await vscode.window.showWarningMessage(vscode.l10n.t('Go back to before this message?'), { modal: true, detail }, ...(changed.size ? [both, conversation] : [conversation]));
 		if (!answer) {
-			return;
+			return undefined;
 		}
 		if (answer === both) {
 			for (const turn of this.turns.slice(index).reverse()) {
@@ -972,22 +1021,24 @@ export class Session implements vscode.Disposable {
 				}
 			}
 		}
-		const turn = this.turns[index];
-		this.messages.length = turn.messageIndex;
-		this.items = this.items.slice(0, turn.itemIndex);
-		this.turns = this.turns.slice(0, index);
-		this.state.readFiles.clear();
-		this.usage = undefined;
-		this.emitter.fire({ type: 'items', items: this.items });
-		this.emitter.fire({ type: 'prefill', text: turn.text });
-		this.postState();
-		await this.save();
+		return answer === both ? 'both' : 'conversation';
+	}
+
+	async undoRestore(): Promise<void> {
+		if (this.running) {
+			return;
+		}
+		if (await this.services.checkpoints.undo()) {
+			this.state.readFiles.clear();
+			this.notice('info', vscode.l10n.t('Your files are back to how they were before the restore.'));
+		}
 	}
 
 	// --- persistence
 
 	toData(): SessionData {
-		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots };
+		const turns = this.turns.map(({ files: _files, ...turn }) => turn);
+		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots, turns };
 	}
 
 	private async save(): Promise<void> {

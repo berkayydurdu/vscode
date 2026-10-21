@@ -282,6 +282,9 @@ export class AgentController implements vscode.Disposable {
 			case 'showUsage':
 				await vscode.commands.executeCommand('nighthawk.ai.showUsage');
 				break;
+			case 'undoRestore':
+				await this.session.undoRestore();
+				break;
 		}
 		this.session.postState();
 	}

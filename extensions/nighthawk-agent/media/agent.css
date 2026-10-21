@@ -383,6 +383,64 @@ kbd {
 	opacity: 1;
 }
 
+/* Checkpoints: a divider above each message, to take the files back to then */
+
+.user-turn {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.checkpoint {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+
+.checkpoint-line {
+	flex: 1;
+	height: 1px;
+	background: var(--border);
+	opacity: 0.6;
+}
+
+.checkpoint-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-small);
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.checkpoint-restore {
+	display: none;
+	color: var(--vscode-textLink-foreground);
+}
+
+.checkpoint-button:not(:disabled):hover,
+.checkpoint-button:focus-visible {
+	border-color: var(--border);
+	background: var(--surface);
+	color: var(--vscode-foreground);
+}
+
+.checkpoint-button:not(:disabled):hover .checkpoint-restore,
+.checkpoint-button:focus-visible .checkpoint-restore {
+	display: inline;
+}
+
+.checkpoint-button:disabled {
+	cursor: default;
+}
+
 .mention {
 	color: var(--vscode-textLink-foreground);
 	font-family: var(--mono);

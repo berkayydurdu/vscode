@@ -13,6 +13,7 @@ import { Endpoints, type QuickSetup } from './host/endpoints';
 import { chooseReviewTarget, generateCommitMessage } from './host/git';
 import { InlineEditController } from './host/inlineEdit';
 import { branchReviewPrompt } from './core/commit';
+import { Checkpoints } from './host/checkpoints';
 import { McpManager } from './host/mcpManager';
 import { SessionStore } from './host/session';
 import { TerminalAssistant } from './host/terminal';
@@ -34,6 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		endpoints,
 		mcp,
 		usage,
+		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
 	};
@@ -81,6 +83,12 @@ export function activate(context: vscode.ExtensionContext): void {
 			controller.focusInput();
 		}),
 		vscode.commands.registerCommand('nighthawk.agent.history', async () => (await view.show()).showHistory()),
+		vscode.commands.registerCommand('nighthawk.agent.restoreCheckpoint', () => host.checkpoints.pickAndRestore((vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath))),
+		vscode.commands.registerCommand('nighthawk.agent.undoRestore', async () => {
+			if (!await host.checkpoints.undo()) {
+				vscode.window.showInformationMessage(vscode.l10n.t('There is no checkpoint restore to undo.'));
+			}
+		}),
 		vscode.commands.registerCommand('nighthawk.agent.addSelection', async () => {
 			const editor = vscode.window.activeTextEditor;
 			if (!editor) {

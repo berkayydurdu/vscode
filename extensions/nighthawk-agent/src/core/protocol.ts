@@ -6,6 +6,12 @@
 // Types shared by the extension and the agent page. Types only: the page
 // bundles this file too, so it must not import anything that needs Node.
 
+/** The files of every folder the agent works in at one moment: a snapshot per folder. */
+export interface Checkpoint {
+	at: number;
+	refs: { root: string; commit: string }[];
+}
+
 export interface DiffLine {
 	kind: ' ' | '+' | '-';
 	text: string;
@@ -48,7 +54,13 @@ export interface Todo {
 export type ItemStatus = 'running' | 'awaiting' | 'done' | 'error' | 'denied';
 
 export type TranscriptItem =
-	| { kind: 'user'; id: string; text: string; queued?: boolean; canRewind?: boolean }
+	| {
+		kind: 'user'; id: string; text: string; queued?: boolean;
+		/** The conversation can go back to before this message. */
+		canRewind?: boolean;
+		/** The files as they were when the message was sent. */
+		checkpoint?: Checkpoint;
+	}
 	| { kind: 'assistant'; id: string; text: string }
 	| { kind: 'thinking'; id: string; text: string; done?: boolean }
 	| {
