@@ -311,6 +311,12 @@ export class AgentController implements vscode.Disposable {
 	}
 
 	private async openFile(file: string, line?: number): Promise<void> {
+		// Codebase search results are shown as "path:start-end".
+		const at = /:(\d+)(?:-\d+)?$/.exec(file);
+		if (at && !line) {
+			file = file.slice(0, at.index);
+			line = Number(at[1]);
+		}
 		const roots = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
 		const absolute = resolvePath({ roots }, file);
 		try {

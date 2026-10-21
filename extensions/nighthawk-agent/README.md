@@ -27,6 +27,7 @@ The agent has the same tool set as Claude Code, so models trained on it feel at 
 | Tool | What it does |
 |---|---|
 | Read, LS, Glob, Grep | Read files and search the workspace (Grep uses the bundled ripgrep) |
+| CodebaseSearch | Find the code that answers a question across the project, by meaning and by names, from the codebase index |
 | Edit, MultiEdit, Write | Change files. A file must be read before it is edited, and stale edits are rejected |
 | Bash, BashOutput, KillBash | Run commands, including background ones. On Windows it uses Git Bash when installed, else PowerShell |
 | TodoWrite | Keep a task list, shown above the input |
@@ -101,6 +102,17 @@ While you type, the model suggests what comes next as grey text: the rest of a l
 - It is off for plain text, Markdown and the commit message box by default (`nighthawk.autocomplete.disabledLanguages`). Files that usually hold secrets, such as `.env` and key files, are never sent.
 
 Autocomplete uses its own model when **AI: Select Model for Autocomplete...** (`nighthawk.autocomplete.model`) sets one, else the inline edit model, else the agent's. Every pause in typing can send a request, so pick a small, fast model; a local model through Ollama or LM Studio costs nothing. Requests are counted on the usage page under Autocomplete.
+
+## Codebase index
+
+Nighthawk keeps an index of the workspace's code on your computer, so the agent can find code by what it does rather than only by exact text: "where do we handle sign-in?" finds `signIn` even when the question shares no word with the code. The agent uses it through its CodebaseSearch tool; **AI: Search Codebase...** searches it yourself.
+
+- The index splits files into chunks of about 40 lines, cut where functions and classes start. It ranks them by words and names (identifiers are split, so `parseUserToken` matches "user token") and, with an embedding model, by meaning. Both rankings are merged.
+- It follows `.gitignore`, plus `.nighthawkignore`, `.cursorignore` and `.aiignore` for files you want to keep away from AI, and `nighthawk.index.exclude`. Files that usually hold secrets (`.env`, key files), lock files, binaries and minified code are never indexed, and things that look like keys or passwords are removed before code is sent for embedding.
+- It updates within seconds as files change, and is saved, so reopening a project only rereads changed files.
+- The database icon in the status bar shows progress; click it to search, rebuild the index, choose the embedding model or turn indexing off.
+
+**Embedding models.** Finding code by meaning needs an embedding model, which `nighthawk.index.embeddingModel` picks automatically from your endpoints: OpenAI (`text-embedding-3-small`), Gemini, Mistral, Voyage, or an embedding model installed in Ollama or LM Studio (for example `ollama pull nomic-embed-text`). Local models are used right away and cost nothing. Before code goes to a cloud model you did not pick yourself, Nighthawk asks once and says what it costs; after that only changed files are sent. Anthropic has no embedding models, so with only an Anthropic endpoint the index ranks by words and names, and the agent adds likely names and synonyms to its searches. Embedding requests are counted on the usage page under Codebase index.
 
 ## Terminal assistant
 

@@ -27,6 +27,14 @@ export interface Price {
  * `nighthawk.ai.prices`.
  */
 const LIST_PRICES: [RegExp, Price][] = [
+	// Embedding models, used by the codebase index
+	[/text-embedding-3-small/, { input: 0.02, output: 0 }],
+	[/text-embedding-3-large/, { input: 0.13, output: 0 }],
+	[/text-embedding-ada/, { input: 0.1, output: 0 }],
+	[/gemini-embedding/, { input: 0.15, output: 0 }],
+	[/codestral-embed/, { input: 0.15, output: 0 }],
+	[/mistral-embed/, { input: 0.1, output: 0 }],
+	[/voyage-code-3/, { input: 0.18, output: 0 }],
 	// Anthropic
 	[/claude-(fable|mythos)-5-1/, { input: 10, output: 50, cacheRead: 0.25 }],
 	[/claude-(fable|mythos)/, { input: 10, output: 50 }],
@@ -123,7 +131,7 @@ export function costOf(usage: Usage, price: Price | undefined): number | undefin
 }
 
 /** What a request was for, shown as "Used for" on the usage page. */
-export type UsageFeature = 'agent' | 'commit' | 'terminal' | 'inline' | 'autocomplete';
+export type UsageFeature = 'agent' | 'commit' | 'terminal' | 'inline' | 'autocomplete' | 'index';
 
 /** One model request, as stored in the monthly usage log. */
 export interface UsageRecord {

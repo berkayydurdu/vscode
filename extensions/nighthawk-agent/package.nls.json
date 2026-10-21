@@ -90,5 +90,14 @@
 	"config.autocomplete.enabled": "Show AI suggestions as grey text while typing. `Tab` accepts a suggestion, `Ctrl+Right` accepts its next word, `Escape` hides it and `Alt+\\` asks for one.",
 	"config.autocomplete.model": "The model for autocomplete, as `Endpoint name/model id`. Leave empty to use the inline edit model (which falls back to the agent's). Pick a small, fast model: suggestions should appear within a second, and every pause in typing sends a request.",
 	"config.autocomplete.delay": "How long typing must pause, in milliseconds, before a suggestion is requested. Longer waits send fewer requests.",
+	"command.index.search": "Search Codebase...",
+	"command.index.menu": "Codebase Index Options...",
+	"command.index.rebuild": "Rebuild Codebase Index",
+	"command.index.selectEmbeddingModel": "Select Embedding Model for the Codebase Index...",
+	"config.index.title": "Codebase Index",
+	"config.index.enabled": "Index the workspace's code on this computer so the agent (its `CodebaseSearch` tool) and **AI: Search Codebase** can find code by meaning, such as \"where do we handle sign-in?\". The index follows `.gitignore`, `.nighthawkignore`, `.cursorignore` and `.aiignore`, and never includes files that usually hold secrets, such as `.env` and key files.",
+	"config.index.embeddingModel": "The embedding model that lets the index find code by meaning, as `Endpoint name/model id` (for example `OpenAI/text-embedding-3-small`, or `nomic-embed-text` on a local Ollama). Leave empty to use one your endpoints offer: local ones right away, cloud ones after you agree. `off` finds code by words and names only, and sends nothing anywhere. Anthropic has no embedding models.",
+	"config.index.exclude": "Glob patterns of more files and folders to leave out of the codebase index, such as `**/fixtures/**`.",
+	"config.index.maxFiles": "The most files the codebase index holds per window.",
 	"config.autocomplete.disabledLanguages": "Languages without autocomplete, by language id (for example `markdown`). Files that usually hold secrets, such as `.env` and key files, never get suggestions."
 }

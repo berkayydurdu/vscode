@@ -147,6 +147,17 @@ export class UsageMeter implements vscode.Disposable {
 		};
 	}
 
+	/** Throws when the monthly limit is reached, for requests that are not chat streams. */
+	async ensureWithinLimit(): Promise<void> {
+		await this.loaded;
+		this.checkLimit();
+	}
+
+	/** Records a finished request that is not a chat stream, such as embeddings. */
+	recordUsage(info: TrackInfo, usage: Usage): number | undefined {
+		return this.record(info, usage);
+	}
+
 	private checkLimit(): void {
 		const limit = this.limit();
 		const spent = this.spent();

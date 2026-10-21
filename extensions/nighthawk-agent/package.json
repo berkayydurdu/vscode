@@ -317,6 +317,36 @@
             "markdownDescription": "%config.autocomplete.disabledLanguages%"
           }
         }
+      },
+      {
+        "title": "%config.index.title%",
+        "properties": {
+          "nighthawk.index.enabled": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "%config.index.enabled%"
+          },
+          "nighthawk.index.embeddingModel": {
+            "type": "string",
+            "scope": "application",
+            "default": "",
+            "markdownDescription": "%config.index.embeddingModel%"
+          },
+          "nighthawk.index.exclude": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "%config.index.exclude%"
+          },
+          "nighthawk.index.maxFiles": {
+            "type": "number",
+            "default": 50000,
+            "minimum": 1,
+            "markdownDescription": "%config.index.maxFiles%"
+          }
+        }
       }
     ],
     "viewsContainers": {
@@ -567,6 +597,26 @@
       {
         "command": "nighthawk.autocomplete.selectModel",
         "title": "%command.autocomplete.selectModel%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.index.search",
+        "title": "%command.index.search%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.index.menu",
+        "title": "%command.index.menu%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.index.rebuild",
+        "title": "%command.index.rebuild%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.index.selectEmbeddingModel",
+        "title": "%command.index.selectEmbeddingModel%",
         "category": "%category.ai%"
       }
     ],
