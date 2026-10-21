@@ -144,6 +144,14 @@ Nighthawk keeps an index of the workspace's code on your computer, so the agent 
 
 **Embedding models.** Finding code by meaning needs an embedding model, which `nighthawk.index.embeddingModel` picks automatically from your endpoints: OpenAI (`text-embedding-3-small`), Gemini, Mistral, Voyage, or an embedding model installed in Ollama or LM Studio (for example `ollama pull nomic-embed-text`). Local models are used right away and cost nothing. Before code goes to a cloud model you did not pick yourself, Nighthawk asks once and says what it costs; after that only changed files are sent. Anthropic has no embedding models, so with only an Anthropic endpoint the index ranks by words and names, and the agent adds likely names and synonyms to its searches. Embedding requests are counted on the usage page under Codebase index.
 
+## Documentation
+
+**AI: Add Documentation...** takes the address of a library's docs, such as `https://react.dev/reference/react`, reads up to 300 pages under that folder of the site and keeps them searchable on your computer. The agent then looks things up with its DocsSearch tool before writing code against that library, instead of relying on what the model remembers, and cites the pages it used.
+
+- Mention `@docs:Name` in a message to have the sections that best match it attached, for example `@docs:React how do I clean up an effect?`.
+- **AI: Search Documentation...** searches the docs yourself and opens the page; **AI: Manage Documentation...** reads a source again, renames or removes it.
+- Sections are found by words, and by meaning too when the codebase index has an embedding model it may use (see Codebase index). Only public pages are read, and only the pages, never your code, are sent for embedding.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.

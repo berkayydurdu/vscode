@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { diffLines } from './diff';
 import { globToRegExp, SKIPPED_DIRS } from './glob';
 import { formatResults, type SearchOptions, type SearchResult } from './indexing';
+import { formatDocResults, type DocResult } from './docs';
 import { looksSecret, type MemoryScope } from './memories';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
 import type { Question, Todo, ToolDisplay } from './protocol';
@@ -88,6 +89,8 @@ export interface ToolContext {
 	readSkill?(name: string): Promise<{ body: string; dir: string } | undefined>;
 	/** Searches the codebase index; absent when indexing is off. */
 	searchCodebase?(query: string, options: SearchOptions, signal: AbortSignal): Promise<CodebaseSearchResult>;
+	/** Searches the documentation the user added; absent when there is none. */
+	searchDocs?(query: string, sources: string[], signal: AbortSignal): Promise<DocResult[]>;
 	/** Saves, changes or deletes a memory and says what happened; absent when memories are off. */
 	memory?(change: MemoryChange): Promise<string>;
 }
@@ -729,6 +732,51 @@ const codebaseSearchTool: Tool = {
 	},
 };
 
+// --- DocsSearch
+
+const docsSearchTool: Tool = {
+	kind: 'read',
+	parallel: true,
+	spec: {
+		name: 'DocsSearch',
+		description: '',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				query: { type: 'string', description: 'What you want to know, as a question or the API names involved.' },
+				sources: { type: 'array', items: { type: 'string' }, description: 'Which documentation to search, by name (default all).' },
+			},
+			required: ['query'],
+			additionalProperties: false,
+		},
+	},
+	title: input => `Search docs for ${JSON.stringify(str(input, 'query', false))}`,
+	async run(input, ctx) {
+		if (!ctx.searchDocs) {
+			throw new ToolError('No documentation has been added. Use WebFetch instead.');
+		}
+		const sources = Array.isArray(input.sources) ? input.sources.map(String) : typeof input.sources === 'string' ? [input.sources] : [];
+		const results = await ctx.searchDocs(str(input, 'query'), sources, ctx.signal);
+		if (!results.length) {
+			return { content: 'Nothing found in the documentation. Try other words, or WebFetch a page.', summary: '0 results' };
+		}
+		return {
+			content: formatDocResults(results),
+			display: { kind: 'files', files: results.map(r => `${r.source}: ${r.title}${r.heading ? ` > ${r.heading}` : ''}`) },
+			summary: `${results.length} results`,
+		};
+	},
+};
+
+/** The DocsSearch description, naming the documentation the user added. */
+export function docsSearchDescription(names: string[]): string {
+	return [
+		'Searches documentation the user added to Nighthawk, which is current and more reliable than what you remember about these libraries. Use it before writing code against them, and when the user mentions @docs:Name.',
+		`Documentation available: ${names.join(', ')}.`,
+		'Returns the most relevant sections with their URLs; WebFetch a URL to read the whole page. Mention the URLs you relied on in your answer.',
+	].join('\n');
+}
+
 // --- Memory
 
 const memoryTool: Tool = {
@@ -1217,13 +1265,13 @@ const exitPlanTool: Tool = {
 };
 
 export const BUILTIN_TOOLS: Tool[] = [
-	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool,
+	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool, docsSearchTool,
 	memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 
 /** Tools a read-only sub-agent may use. */
-export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'WebFetch', 'BashOutput', 'Skill']);
+export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'DocsSearch', 'WebFetch', 'BashOutput', 'Skill']);
 
 export function isOutsideWorkspace(tool: Tool, input: Record<string, unknown>, workspace: Workspace): boolean {
 	try {

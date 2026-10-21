@@ -713,6 +713,21 @@
         "command": "nighthawk.index.selectEmbeddingModel",
         "title": "%command.index.selectEmbeddingModel%",
         "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.add",
+        "title": "%command.docs.add%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.manage",
+        "title": "%command.docs.manage%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.search",
+        "title": "%command.docs.search%",
+        "category": "%category.ai%"
       }
     ],
     "menus": {

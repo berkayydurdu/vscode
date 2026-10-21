@@ -282,6 +282,12 @@ export class CodebaseIndexer implements vscode.Disposable {
 		return undefined;
 	}
 
+	/** The embedding model the index uses, for searching documentation by meaning too; undefined while it has none it may use. */
+	docsEmbedder(): Embedder | undefined {
+		const choice = this.embedding;
+		return choice && this.allowed(choice) ? this.embedder(choice) : undefined;
+	}
+
 	/** Whether code may be sent to this model for indexing without asking: chosen by the user, or running on this computer. */
 	private allowed(choice: EmbeddingChoice): boolean {
 		return !choice.automatic || isLocalEndpoint(choice.endpoint.baseUrl);
