@@ -728,6 +728,22 @@
         "command": "nighthawk.docs.search",
         "title": "%command.docs.search%",
         "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.preview.open",
+        "title": "%command.preview.open%",
+        "category": "%category.ai%",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "nighthawk.preview.pick",
+        "title": "%command.preview.pick%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.preview.reload",
+        "title": "%command.preview.reload%",
+        "category": "%category.ai%"
       }
     ],
     "menus": {

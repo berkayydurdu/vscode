@@ -13,6 +13,8 @@ run({
 		'agent': path.join(srcDir, 'main.ts'),
 		'usage': path.join(srcDir, 'usage.ts'),
 		'inlineEdit': path.join(srcDir, 'inlineEdit.ts'),
+		'preview': path.join(srcDir, 'preview.ts'),
+		'previewPicker': path.join(srcDir, 'previewPicker.ts'),
 	},
 	srcDir,
 	outdir: outDir,

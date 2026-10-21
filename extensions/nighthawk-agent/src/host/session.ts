@@ -30,6 +30,7 @@ import type { CodebaseIndexer } from './codeIndex';
 import type { McpManager } from './mcpManager';
 import type { Docs } from './docs';
 import type { Memories } from './memories';
+import type { Preview } from './preview';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
 
@@ -46,6 +47,8 @@ export interface Services {
 	memories?: Memories;
 	/** Documentation the user added, for the DocsSearch tool and @docs mentions. */
 	docs?: Docs;
+	/** The live preview, for @preview mentions of picked elements and console errors. */
+	preview?: Preview;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -452,6 +455,15 @@ export class Session implements vscode.Disposable {
 			const docsMention = /^docs:(?<name>.+)$/i.exec(ref);
 			if (docsMention?.groups) {
 				docs.push(docsMention.groups.name);
+				continue;
+			}
+			const previewMention = /^preview:(?<ref>\d+|errors)$/i.exec(ref);
+			if (previewMention?.groups) {
+				const context = !seen.has(ref) && this.services.preview?.mention(previewMention.groups.ref.toLowerCase());
+				seen.add(ref);
+				if (context) {
+					parts.push(context);
+				}
 				continue;
 			}
 			let range: [number, number] | undefined;

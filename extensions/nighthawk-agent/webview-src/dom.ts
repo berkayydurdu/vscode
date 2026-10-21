@@ -94,6 +94,8 @@ const ICONS: Record<string, [string, Record<string, string | number>][]> = {
 	circleCheck: [['circle', { cx: 8, cy: 8, r: 5.5, fill: 'currentColor' }], ['path', { d: 'M5.5 8.1l1.75 1.75 3.25-3.5', stroke: 'var(--vscode-editor-background)' }]],
 	trash: [['path', { d: 'M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 9h5.8l.6-9' }]],
 	gear: [['circle', { cx: 8, cy: 8, r: 2 }], ['path', { d: 'M8 1.75v1.5M8 12.75v1.5M14.25 8h-1.5M3.25 8h-1.5M12.4 3.6l-1.05 1.05M4.65 11.35L3.6 12.4M12.4 12.4l-1.05-1.05M4.65 4.65L3.6 3.6' }]],
+	refresh: [['path', { d: 'M13 8a5 5 0 1 1-1.5-3.55' }], ['path', { d: 'M13 2.5v2.75h-2.75' }]],
+	pointer: [['path', { d: 'M3 2.5l3.6 10.5 1.7-4.3 4.2-1.7z' }], ['path', { d: 'M8.6 8.9l3.6 3.6' }]],
 };
 
 export function icon(name: string, size = 16, className = ''): SVGElement {

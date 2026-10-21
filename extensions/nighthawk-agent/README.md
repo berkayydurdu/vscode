@@ -152,6 +152,14 @@ Nighthawk keeps an index of the workspace's code on your computer, so the agent 
 - **AI: Search Documentation...** searches the docs yourself and opens the page; **AI: Manage Documentation...** reads a source again, renames or removes it.
 - Sections are found by words, and by meaning too when the codebase index has an embedding model it may use (see Codebase index). Only public pages are read, and only the pages, never your code, are sent for embedding.
 
+## Live preview
+
+**AI: Open Live Preview...** shows your running dev server in an editor tab, next to the code. It finds servers on the usual ports (3000, 5173, 8080 and others) or takes any address.
+
+- **Pick Element**, then click something on the page: it is added to the agent as `@preview:1`, so you can write "@preview:1 make this green" without describing which button you mean. The agent gets the element's markup, selector, size and computed styles, its React or Vue component names and, when the framework reports it in development, the file and line it comes from.
+- Console errors on the page are counted in the toolbar; click the count to send them to the agent as `@preview:errors`.
+- The page keeps live reload, because the preview passes its WebSocket through. It runs through a small proxy on 127.0.0.1 that only talks to that one dev server and adds the picker script to its pages.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.

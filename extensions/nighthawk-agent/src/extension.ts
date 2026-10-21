@@ -18,6 +18,7 @@ import { branchReviewPrompt } from './core/commit';
 import { Checkpoints } from './host/checkpoints';
 import { CodebaseIndexer } from './host/codeIndex';
 import { Docs } from './host/docs';
+import { Preview } from './host/preview';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -39,6 +40,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const codeIndex = new CodebaseIndexer(context, endpoints, usage, workspaceKey());
 	const memories = new Memories(context.globalStorageUri, workspaceKey());
 	const docs = new Docs(context.globalStorageUri, () => codeIndex.docsEmbedder());
+	const preview = new Preview(context, async text => (await view.show()).prefill(text));
 	const host: ControllerHost = {
 		context,
 		endpoints,
@@ -47,6 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		codeIndex,
 		memories,
 		docs,
+		preview,
 		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
@@ -76,7 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, memories, docs, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -196,6 +199,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.docs.add', (url?: unknown) => docs.add(typeof url === 'string' ? url : undefined)),
 		vscode.commands.registerCommand('nighthawk.docs.manage', () => docs.manage()),
 		vscode.commands.registerCommand('nighthawk.docs.search', () => docs.searchCommand()),
+		vscode.commands.registerCommand('nighthawk.preview.open', (url?: unknown) => preview.open(typeof url === 'string' ? url : undefined)),
+		vscode.commands.registerCommand('nighthawk.preview.pick', () => preview.pick()),
+		vscode.commands.registerCommand('nighthawk.preview.reload', () => preview.reload()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
