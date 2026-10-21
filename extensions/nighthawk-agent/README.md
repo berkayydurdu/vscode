@@ -160,6 +160,14 @@ Nighthawk keeps an index of the workspace's code on your computer, so the agent 
 - Console errors on the page are counted in the toolbar; click the count to send them to the agent as `@preview:errors`.
 - The page keeps live reload, because the preview passes its WebSocket through. It runs through a small proxy on 127.0.0.1 that only talks to that one dev server and adds the picker script to its pages.
 
+## Code maps
+
+**AI: New Code Map...** (or `/map <question>` in the agent) asks a question such as "how does sign-in work?". The agent reads the code without changing it, then draws a map in an editor tab: a short answer, the parts involved in the order to read them, each location with a note, and arrows for calls and data flow. Click any entry to open the code beside the map.
+
+- **Ask a Follow-up** continues in the agent, **Copy as Markdown** puts the map in your clipboard for notes or a pull request, and **Draw Again** reruns it after the code changed.
+- The agent can also draw a map on its own when you ask how something works across several files. Locations are checked against the files, so the map never points at lines that do not exist.
+- **AI: Show Code Maps...** lists the maps made in this workspace.
+
 ## Multibuffers
 
 A multibuffer shows excerpts from many files in one editable tab, each under a header naming its file and lines. Saving writes every changed excerpt back into its file. Because it is one document, multiple cursors, find and replace, and inline edit (Ctrl+I) work across all the files at once.

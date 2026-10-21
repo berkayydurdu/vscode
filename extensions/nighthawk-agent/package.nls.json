@@ -116,6 +116,8 @@
 	"command.preview.open": "Open Live Preview...",
 	"command.preview.pick": "Pick Element in Live Preview",
 	"command.preview.reload": "Reload Live Preview",
+	"command.codeMap.new": "New Code Map...",
+	"command.codeMap.open": "Show Code Maps...",
 	"command.multibuffer.search": "Search into Multibuffer...",
 	"command.multibuffer.references": "Open References in Multibuffer",
 	"command.multibuffer.problems": "Open Problems in Multibuffer",

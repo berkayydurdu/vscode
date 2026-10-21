@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { AcpClient, AcpError, contentText, externalAgents, pickOption, type AcpContent, type AcpMode, type AcpPermissionOption, type AcpToolCall, type AcpUpdate } from '../core/acp';
 import { Agent, type AgentEvent, type PermissionAnswer } from '../core/agent';
 import { diffLines } from '../core/diff';
+import { mapPrompt } from '../core/codemap';
 import { formatDocResults } from '../core/docs';
 import { Hooks } from '../core/hooks';
 import { decide, isSafeCommand, parseRule, PERMISSION_MODES, suggestRule, type PermissionMode, type Rule } from '../core/permissions';
@@ -31,6 +32,7 @@ import type { McpManager } from './mcpManager';
 import type { Docs } from './docs';
 import type { Memories } from './memories';
 import type { Preview } from './preview';
+import type { CodeMaps } from './codeMaps';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
 
@@ -49,6 +51,8 @@ export interface Services {
 	docs?: Docs;
 	/** The live preview, for @preview mentions of picked elements and console errors. */
 	preview?: Preview;
+	/** Shows maps from the CodeMap tool. */
+	codeMaps?: CodeMaps;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -114,6 +118,7 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
 	{ name: 'spec', description: 'Write requirements, a design and tasks for you to approve, then build it task by task', hint: '<what to build>' },
 	{ name: 'memory', description: 'Open the project\'s AGENTS.md instructions' },
 	{ name: 'memories', description: 'Show, edit or forget what the agent remembers' },
+	{ name: 'map', description: 'Draw a code map: the code that answers a question and how it connects', hint: '<question>' },
 	{ name: 'skills', description: 'List the available skills' },
 	{ name: 'agents', description: 'List the sub-agents' },
 	{ name: 'mcp', description: 'Show MCP servers and restart them' },
@@ -155,7 +160,7 @@ function agentMode(modes: AcpMode[], mode: PermissionMode): string | undefined {
 }
 
 /** Tools a sub-agent never gets: they talk to the user or would nest agents. */
-const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'Memory']);
+const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'Memory', 'CodeMap']);
 
 function newId(prefix: string): string {
 	return `${prefix}_${randomUUID().slice(0, 8)}`;
@@ -555,6 +560,11 @@ export class Session implements vscode.Disposable {
 				return;
 			case 'spec':
 				return void vscode.commands.executeCommand('nighthawk.spec.new', args.trim() || undefined);
+			case 'map':
+				if (!args.trim()) {
+					return void vscode.commands.executeCommand('nighthawk.codeMap.new');
+				}
+				return this.startTurn(text, mapPrompt(args.trim()));
 			case 'memory':
 				return void this.openMemory();
 			case 'memories':
@@ -726,6 +736,9 @@ export class Session implements vscode.Disposable {
 			if (name === 'DocsSearch' && !docs.length) {
 				continue;
 			}
+			if (name === 'CodeMap' && !this.services.codeMaps) {
+				continue;
+			}
 			const description = name === 'Bash' ? bashDescription(this.shell, platform)
 				: name === 'Task' ? taskDescription(project.agents)
 					: name === 'Skill' ? skillDescription(project.skills)
@@ -812,6 +825,7 @@ export class Session implements vscode.Disposable {
 				},
 				searchCodebase: (query, options, searchSignal) => this.searchCodebase(query, options, searchSignal),
 				searchDocs: docs && ((query, sources, searchSignal) => docs.search(query, sources, searchSignal)),
+				showCodeMap: this.services.codeMaps && (map => this.services.codeMaps!.show(map)),
 				memory: memories && (change => memories.apply(change, this.title || undefined)),
 				runSubagent: (type, _description, prompt, callId, subSignal) => this.runSubagent({ type, prompt, callId, signal: subSignal, project, tools, hooks, promptContext, context }),
 			};

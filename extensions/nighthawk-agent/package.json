@@ -746,6 +746,16 @@
         "category": "%category.ai%"
       },
       {
+        "command": "nighthawk.codeMap.new",
+        "title": "%command.codeMap.new%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.codeMap.open",
+        "title": "%command.codeMap.open%",
+        "category": "%category.ai%"
+      },
+      {
         "command": "nighthawk.multibuffer.search",
         "title": "%command.multibuffer.search%",
         "category": "%category.multibuffer%"

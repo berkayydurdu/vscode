@@ -20,6 +20,7 @@ import { CodebaseIndexer } from './host/codeIndex';
 import { Docs } from './host/docs';
 import { Preview } from './host/preview';
 import { Multibuffers } from './host/multibuffer';
+import { CodeMaps } from './host/codeMaps';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -43,6 +44,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	const docs = new Docs(context.globalStorageUri, () => codeIndex.docsEmbedder());
 	const preview = new Preview(context, async text => (await view.show()).prefill(text));
 	const multibuffers = new Multibuffers();
+	const codeMaps = new CodeMaps(context, workspaceKey(), async (shown, prompt) => {
+		const controller = await view.show();
+		controller.startNew();
+		await controller.session.sendTask(shown, prompt);
+	}, async text => (await view.show()).prefill(text));
 	const host: ControllerHost = {
 		context,
 		endpoints,
@@ -52,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		memories,
 		docs,
 		preview,
+		codeMaps,
 		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
@@ -81,7 +88,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -209,6 +216,8 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.multibuffer.problems', () => multibuffers.problems()),
 		vscode.commands.registerCommand('nighthawk.multibuffer.openSource', (uri?: vscode.Uri, line?: number) => multibuffers.openSource(uri instanceof vscode.Uri ? uri : undefined, typeof line === 'number' ? line : undefined)),
 		vscode.commands.registerCommand('nighthawk.multibuffer.reload', () => multibuffers.reload()),
+		vscode.commands.registerCommand('nighthawk.codeMap.new', (question?: unknown) => codeMaps.create(typeof question === 'string' ? question : undefined)),
+		vscode.commands.registerCommand('nighthawk.codeMap.open', () => codeMaps.pick()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

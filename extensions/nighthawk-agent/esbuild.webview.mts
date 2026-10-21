@@ -14,6 +14,7 @@ run({
 		'usage': path.join(srcDir, 'usage.ts'),
 		'inlineEdit': path.join(srcDir, 'inlineEdit.ts'),
 		'preview': path.join(srcDir, 'preview.ts'),
+		'codeMap': path.join(srcDir, 'codeMap.ts'),
 		'previewPicker': path.join(srcDir, 'previewPicker.ts'),
 	},
 	srcDir,

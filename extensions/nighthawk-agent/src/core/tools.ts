@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { diffLines } from './diff';
 import { globToRegExp, SKIPPED_DIRS } from './glob';
 import { formatResults, type SearchOptions, type SearchResult } from './indexing';
+import { checkCodeMap, CODE_MAP_SCHEMA, type CodeMap } from './codemap';
 import { formatDocResults, type DocResult } from './docs';
 import { looksSecret, type MemoryScope } from './memories';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
@@ -93,6 +94,8 @@ export interface ToolContext {
 	searchDocs?(query: string, sources: string[], signal: AbortSignal): Promise<DocResult[]>;
 	/** Saves, changes or deletes a memory and says what happened; absent when memories are off. */
 	memory?(change: MemoryChange): Promise<string>;
+	/** Shows a code map to the user; absent where there is no editor to show it in. */
+	showCodeMap?(map: CodeMap): Promise<void>;
 }
 
 export type MemoryChange =
@@ -777,6 +780,38 @@ export function docsSearchDescription(names: string[]): string {
 	].join('\n');
 }
 
+// --- CodeMap
+
+const codeMapTool: Tool = {
+	kind: 'read',
+	spec: {
+		name: 'CodeMap',
+		description: [
+			'Shows the user a code map: a diagram and outline of the code locations that answer a question about how something works, each with a note, grouped in sections, with arrows for calls and data flow.',
+			'Use it when the user asks for a code map, or asks how a feature or flow works across several files and a map would explain it better than prose. Explore first and only include locations you have read.',
+		].join('\n'),
+		inputSchema: CODE_MAP_SCHEMA,
+	},
+	title: input => `Code map: ${str(input, 'title', false)}`,
+	async run(input, ctx) {
+		if (!ctx.showCodeMap) {
+			throw new ToolError('Code maps cannot be shown here. Answer in text instead.');
+		}
+		const question = str(input, 'question', false) || str(input, 'title', false);
+		const { map, problems } = await checkCodeMap(input, question, async file => {
+			const text = await ctx.workspace.readText(resolvePath(ctx.workspace, file)).catch(() => undefined);
+			return text === undefined ? undefined : text.split(/\r?\n/).length;
+		});
+		const count = map.sections.reduce((sum, s) => sum + s.items.length, 0);
+		if (!count) {
+			throw new ToolError(`The map has no valid locations. ${problems.join(' ')}`);
+		}
+		await ctx.showCodeMap(map);
+		const left = problems.length ? `\nLeft out: ${problems.join(' ')} Call CodeMap again with fixes if these matter.` : '';
+		return { content: `The map is shown to the user: ${count} locations in ${map.sections.length} sections.${left}`, summary: `${count} locations` };
+	},
+};
+
 // --- Memory
 
 const memoryTool: Tool = {
@@ -1266,7 +1301,7 @@ const exitPlanTool: Tool = {
 
 export const BUILTIN_TOOLS: Tool[] = [
 	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool, docsSearchTool,
-	memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
+	codeMapTool, memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 
