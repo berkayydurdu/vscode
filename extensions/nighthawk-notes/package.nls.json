@@ -2,6 +2,7 @@
 	"displayName": "Nighthawk Notes",
 	"description": "Linked Markdown notes with backlinks, tags and a graph view, plus team spaces with boards, tickets, time tracking and RFCs.",
 	"container.title": "Notes",
+	"container.teams": "Teams",
 	"view.vault": "My Notes",
 	"view.backlinks": "Backlinks",
 	"view.tags": "Tags",

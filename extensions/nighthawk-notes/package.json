@@ -118,6 +118,11 @@
           "id": "nighthawk-notes",
           "icon": "$(notebook)",
           "title": "%container.title%"
+        },
+        {
+          "id": "nighthawk-teams",
+          "icon": "$(organization)",
+          "title": "%container.teams%"
         }
       ]
     },
@@ -128,10 +133,6 @@
           "name": "%view.vault%"
         },
         {
-          "id": "nighthawk.notes.teams",
-          "name": "%view.teams%"
-        },
-        {
           "id": "nighthawk.notes.backlinks",
           "name": "%view.backlinks%"
         },
@@ -139,6 +140,12 @@
           "id": "nighthawk.notes.tags",
           "name": "%view.tags%",
           "visibility": "collapsed"
+        }
+      ],
+      "nighthawk-teams": [
+        {
+          "id": "nighthawk.notes.teams",
+          "name": "%view.teams%"
         }
       ]
     },
