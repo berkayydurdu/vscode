@@ -420,6 +420,14 @@ export class CustomMenubarControl extends MenubarControl {
 						this.updateService.quitAndInstall()
 				});
 
+			// Keep the entry while updates are off, so it can say why.
+			case StateType.Uninitialized:
+			case StateType.Disabled:
+				return toAction({
+					id: 'update.unavailable', label: localize({ key: 'checkForUpdates', comment: ['&& denotes a mnemonic'] }, "Check for &&Updates..."), enabled: true, run: () =>
+						this.commandService.executeCommand('update.unavailable')
+				});
+
 			default:
 				return null;
 		}

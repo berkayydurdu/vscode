@@ -677,6 +677,15 @@ export class Menubar extends Disposable {
 					}
 				})];
 
+			// Keep the entry while updates are off, so it can say why.
+			case StateType.Uninitialized:
+			case StateType.Disabled:
+				return [new MenuItem({
+					label: this.mnemonicLabel(nls.localize('miCheckForUpdates', "Check for &&Updates...")), click: () => {
+						this.runActionInRenderer({ type: 'commandId', commandId: 'update.unavailable' });
+					}
+				})];
+
 			default:
 				return [];
 		}
