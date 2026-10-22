@@ -171,6 +171,10 @@ window.addEventListener('resize', () => {
 });
 
 window.addEventListener('message', event => {
+	// The extension's messages are relayed by the webview host, which shares this page's origin.
+	if (event.origin !== window.origin) {
+		return;
+	}
 	const message = event.data as CodeMapHostMessage;
 	if (message?.type === 'map') {
 		setBundle(message.l10n);

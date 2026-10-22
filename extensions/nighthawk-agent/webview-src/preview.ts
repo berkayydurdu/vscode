@@ -118,7 +118,10 @@ window.addEventListener('message', event => {
 		}
 		return;
 	}
-	// From the extension.
+	// From the extension, relayed by the webview host, which shares this page's origin.
+	if (event.origin !== window.origin) {
+		return;
+	}
 	const message = event.data as PreviewHostMessage;
 	switch (message?.type) {
 		case 'load':
