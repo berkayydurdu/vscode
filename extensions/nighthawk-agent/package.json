@@ -399,6 +399,19 @@
             "markdownDescription": "%config.index.maxFiles%"
           }
         }
+      },
+      {
+        "title": "%config.scratch.title%",
+        "properties": {
+          "nighthawk.scratch.runners": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.scratch.runners%"
+          }
+        }
       }
     ],
     "viewsContainers": {
@@ -424,12 +437,24 @@
           "icon": "$(layers)",
           "visibility": "collapsed"
         }
+      ],
+      "explorer": [
+        {
+          "id": "nighthawk.scratches",
+          "name": "%view.scratches%",
+          "icon": "$(notebook)",
+          "visibility": "collapsed"
+        }
       ]
     },
     "viewsWelcome": [
       {
         "view": "nighthawk.agent.background",
         "contents": "%view.background.welcome%"
+      },
+      {
+        "view": "nighthawk.scratches",
+        "contents": "%view.scratches.welcome%"
       }
     ],
     "commands": [
@@ -761,6 +786,40 @@
         "category": "%category.search%"
       },
       {
+        "command": "nighthawk.scratch.new",
+        "title": "%command.scratch.new%",
+        "category": "%category.scratch%",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nighthawk.scratch.newFromSelection",
+        "title": "%command.scratch.newFromSelection%",
+        "category": "%category.scratch%"
+      },
+      {
+        "command": "nighthawk.scratch.run",
+        "title": "%command.scratch.run%",
+        "category": "%category.scratch%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nighthawk.scratch.rename",
+        "title": "%command.scratch.rename%",
+        "category": "%category.scratch%"
+      },
+      {
+        "command": "nighthawk.scratch.delete",
+        "title": "%command.scratch.delete%",
+        "category": "%category.scratch%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nighthawk.scratch.revealFolder",
+        "title": "%command.scratch.revealFolder%",
+        "category": "%category.scratch%",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "nighthawk.macro.toggleRecording",
         "title": "%command.macro.toggleRecording%",
         "category": "%category.macro%",
@@ -904,6 +963,14 @@
         {
           "command": "nighthawk.macro.wrap",
           "when": "false"
+        },
+        {
+          "command": "nighthawk.scratch.rename",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.scratch.delete",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -946,6 +1013,16 @@
           "command": "nighthawk.agent.restartMcp",
           "when": "view == nighthawk.agent.chat",
           "group": "1_settings@2"
+        },
+        {
+          "command": "nighthawk.scratch.new",
+          "when": "view == nighthawk.scratches",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.scratch.revealFolder",
+          "when": "view == nighthawk.scratches",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -998,6 +1075,26 @@
           "command": "nighthawk.agent.background.discard",
           "when": "view == nighthawk.agent.background",
           "group": "3_remove@1"
+        },
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "1_run@1"
+        },
+        {
+          "command": "nighthawk.scratch.rename",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "nighthawk.scratch.delete",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "2_edit@2"
         }
       ],
       "scm/inputBox": [
@@ -1042,6 +1139,18 @@
         {
           "command": "nighthawk.agent.fixProblems",
           "group": "nighthawk@2"
+        },
+        {
+          "command": "nighthawk.scratch.newFromSelection",
+          "when": "editorHasSelection",
+          "group": "9_cutcopypaste@9"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "resourcePath in nighthawk.scratchFiles",
+          "group": "navigation@0"
         }
       ]
     },

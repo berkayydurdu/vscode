@@ -203,6 +203,15 @@ Record a sequence of edits once and play it back, as in Emacs and Sublime Text.
 - **Macro: Save Last Macro...** keeps it under a name. **Macro: Run Saved Macro...** lists saved macros to run or delete; the keyboard button copies a keybinding for `nighthawk.macro.run` with the macro's name to paste into keybindings.json.
 - Macros cannot record while another extension, such as Vim, takes over typing.
 
+## Scratch files
+
+Throwaway files of any language that live outside your projects, as in JetBrains IDEs. Every workspace sees the same scratches.
+
+- **Scratch: New Scratch File...** asks for a language (JavaScript, TypeScript, Python, Go, Rust, Java, C#, C, C++, Ruby, shell and more) and opens a new file; languages that need a main function start with one. **Scratch: New Scratch File from Selection** (also in the editor's context menu) copies the selection into one.
+- The **Scratches** view in the Explorer lists them, newest first, to open, run, rename or delete.
+- The play button in a scratch file's title bar (or **Scratch: Run File**, which works on any file) saves and runs it in a terminal: output as it comes, typed input goes to the program, Ctrl+C stops it, and the exit code and time show at the end.
+- Files run with the usual command for their language: `node` (TypeScript too, on Node 22.6 or later), `python3`, `go run`, `rustc` then the program, `java`, `dotnet run`, `cc`, and so on. A `#!` line picks the program instead, and `nighthawk.scratch.runners` sets your own per extension, such as `{ "py": "uv run ${file}" }`.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
