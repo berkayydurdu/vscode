@@ -190,18 +190,11 @@ function mainLog(): string {
 	return found.join('\n');
 }
 
-async function runCommand(title: string) {
-	await window.keyboard.press('F1');
-	await window.waitForSelector('.quick-input-widget input', { timeout: 10_000 });
-	await window.keyboard.type(title);
-	await sleep(1500);
-	await window.keyboard.press('Enter');
-}
-
 try {
 	// Nothing to click: the first automatic check runs 30 seconds after startup.
 	if (platform === 'linux') {
 		await waitFor('the update to be offered', () => mainLog().includes('update#setState available for download'), 3 * 60_000);
+		await window.waitForSelector('.notification-toast:has-text("is available")', { timeout: 30_000 });
 		await sleep(2000);
 		await window.screenshot({ path: path.join(screenshotDir, 'update-linux-available.png') });
 		log('Linux: update offered');
@@ -217,7 +210,8 @@ try {
 		await window.screenshot({ path: path.join(screenshotDir, 'update-win32-ready.png') });
 		log('Windows: update ready, restarting');
 
-		await runCommand('Nighthawk: Restart to Update');
+		// Restart from the popup that announces the update, like a user would.
+		await window.click('.notification-toast .monaco-button:has-text("Restart to Update")', { timeout: 30_000 });
 		await waitFor('the app to quit', async () => {
 			try {
 				await window.title();
