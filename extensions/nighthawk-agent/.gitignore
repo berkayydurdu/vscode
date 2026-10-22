@@ -1,2 +1,3 @@
 # Ignore built files
 media/*.js
+media/*.mjs

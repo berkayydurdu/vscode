@@ -47,6 +47,7 @@ function featureName(key: string): string {
 		case 'autocomplete': return t('Autocomplete');
 		case 'nextEdit': return t('Next edits');
 		case 'index': return t('Codebase index');
+		case 'prReview': return t('PR review');
 		default: return key;
 	}
 }

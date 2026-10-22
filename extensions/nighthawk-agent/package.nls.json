@@ -122,6 +122,8 @@
 	"command.codeMap.new": "New Code Map...",
 	"command.codeMap.open": "Show Code Maps...",
 	"command.structural.run": "Structural Search and Replace...",
+	"command.prReview.run": "Review Pull Request...",
+	"command.prReview.setUpBot": "Set Up Automatic PR Reviews...",
 	"command.scratch.new": "New Scratch File...",
 	"command.scratch.newFromSelection": "New Scratch File from Selection",
 	"command.scratch.run": "Run File",

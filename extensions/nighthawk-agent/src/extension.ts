@@ -24,6 +24,7 @@ import { CodeMaps } from './host/codeMaps';
 import { StructuralSearch } from './host/structural';
 import { Macros } from './host/macros';
 import { Scratches, type ScratchItem } from './host/scratches';
+import { PullRequestReviews } from './host/prReview';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -77,6 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		controller.startNew();
 		await controller.session.sendTask(shown, prompt);
 	});
+	const prReviews = new PullRequestReviews(context, endpoints, usage);
 	const inlineEdit = new InlineEditController(context, endpoints, usage);
 	const autocomplete = new Autocomplete(endpoints, usage, () => inlineEdit.model());
 	const specs = new Specs(() => view.show());
@@ -225,6 +227,8 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.codeMap.new', (question?: unknown) => codeMaps.create(typeof question === 'string' ? question : undefined)),
 		vscode.commands.registerCommand('nighthawk.codeMap.open', () => codeMaps.pick()),
 		vscode.commands.registerCommand('nighthawk.structural.run', () => structural.run()),
+		vscode.commands.registerCommand('nighthawk.prReview.run', (number?: unknown) => prReviews.review(typeof number === 'number' ? number : undefined)),
+		vscode.commands.registerCommand('nighthawk.prReview.setUpBot', () => prReviews.setUpBot()),
 		vscode.commands.registerCommand('nighthawk.scratch.new', () => scratches.create()),
 		vscode.commands.registerCommand('nighthawk.scratch.newFromSelection', () => scratches.createFromSelection()),
 		vscode.commands.registerCommand('nighthawk.scratch.run', (target?: vscode.Uri | ScratchItem) => scratches.runFile(target)),

@@ -786,6 +786,17 @@
         "category": "%category.search%"
       },
       {
+        "command": "nighthawk.prReview.run",
+        "title": "%command.prReview.run%",
+        "category": "%category.ai%",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "nighthawk.prReview.setUpBot",
+        "title": "%command.prReview.setUpBot%",
+        "category": "%category.ai%"
+      },
+      {
         "command": "nighthawk.scratch.new",
         "title": "%command.scratch.new%",
         "category": "%category.scratch%",
@@ -1108,6 +1119,16 @@
           "command": "nighthawk.agent.reviewBranch",
           "when": "scmProvider == git",
           "group": "navigation@50"
+        },
+        {
+          "command": "nighthawk.prReview.run",
+          "when": "scmProvider == git",
+          "group": "9_nighthawk@2"
+        },
+        {
+          "command": "nighthawk.prReview.setUpBot",
+          "when": "scmProvider == git",
+          "group": "9_nighthawk@3"
         }
       ],
       "terminal/context": [

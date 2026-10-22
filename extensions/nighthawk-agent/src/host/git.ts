@@ -17,6 +17,7 @@ interface GitRepository {
 		readonly HEAD: { readonly name?: string; readonly upstream?: { readonly remote: string; readonly name: string } } | undefined;
 		readonly indexChanges: readonly unknown[];
 		readonly workingTreeChanges: readonly unknown[];
+		readonly remotes: readonly { readonly name: string; readonly fetchUrl?: string; readonly pushUrl?: string }[];
 	};
 	diff(cached?: boolean): Promise<string>;
 	log(options?: { maxEntries?: number }): Promise<{ readonly message: string }[]>;
@@ -57,7 +58,7 @@ async function gitApi(): Promise<GitApi | undefined> {
  * Finds the repository a Source Control command was run on: the argument the
  * SCM title or input menu passes, else the active editor's, else the only one.
  */
-async function pickRepository(arg: unknown): Promise<GitRepository | undefined> {
+export async function pickRepository(arg: unknown): Promise<GitRepository | undefined> {
 	const api = await gitApi();
 	if (!api) {
 		vscode.window.showWarningMessage(vscode.l10n.t('The built-in Git extension is disabled.'));

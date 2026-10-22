@@ -212,6 +212,14 @@ Throwaway files of any language that live outside your projects, as in JetBrains
 - The play button in a scratch file's title bar (or **Scratch: Run File**, which works on any file) saves and runs it in a terminal: output as it comes, typed input goes to the program, Ctrl+C stops it, and the exit code and time show at the end.
 - Files run with the usual command for their language: `node` (TypeScript too, on Node 22.6 or later), `python3`, `go run`, `rustc` then the program, `java`, `dotnet run`, `cc`, and so on. A `#!` line picks the program instead, and `nighthawk.scratch.runners` sets your own per extension, such as `{ "py": "uv run ${file}" }`.
 
+## Pull request reviews
+
+A reviewer for GitHub pull requests, like Cursor's Bugbot, using your own model.
+
+- **AI: Review Pull Request...** (also in the Source Control **...** menu) lists the repository's open pull requests, reads the one you pick (its diff and the changed files), and lists what the model found, worst first, all ticked. Untick what you disagree with, open a finding's line with its button, and press Enter: after you confirm, the rest are posted as one review, each comment on its line, with a suggestion GitHub can apply when the fix is one line. Signing in to GitHub is asked for the first time.
+- **AI: Set Up Automatic PR Reviews...** adds `.github/workflows/nighthawk-review.yml` and its script `.github/nighthawk/review.mjs` to the repository. Add your model's API key as the repository secret `NIGHTHAWK_REVIEW_API_KEY` and push: every push to a pull request gets reviewed, posting only findings that were not posted before. The repository variables `NIGHTHAWK_REVIEW_PROVIDER` (`anthropic` or `openai`), `NIGHTHAWK_REVIEW_MODEL` and `NIGHTHAWK_REVIEW_BASE_URL` change the model; pull requests from forks are skipped, as GitHub gives them no secrets.
+- Both read the repository's own rules from `.nighthawk/review.md` (or Cursor's `.cursor/BUGBOT.md`) on the pull request's branch, such as "every handler checks permissions".
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
