@@ -886,7 +886,8 @@ function highlightMentions(text: string): Child[] {
 		const start = match.index + match[1].length;
 		out.push(text.slice(last, start));
 		const ref = match[2].slice(1).replace(/#L.*$/, '');
-		const mention = h('span', { class: 'mention file-link', 'data-path': ref }, match[2]);
+		// @docs:Name and @preview:N name documentation and picked elements, not files.
+		const mention = /^(docs|preview):/i.test(ref) ? h('span', { class: 'mention' }, match[2]) : h('span', { class: 'mention file-link', 'data-path': ref }, match[2]);
 		out.push(mention);
 		last = start + match[2].length;
 	}

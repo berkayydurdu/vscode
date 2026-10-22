@@ -42,6 +42,8 @@ export class AgentController implements vscode.Disposable {
 	private listener: vscode.Disposable | undefined;
 	private readonly disposables: vscode.Disposable[] = [];
 	private ready = false;
+	/** Text to put in the input once the page is ready, when asked before it was. */
+	private pendingPrefill: { text: string; append: boolean }[] = [];
 	/** Conversations shown here that something else owns, such as background tasks. */
 	private readonly borrowed = new WeakSet<Session>();
 	private readonly disposed = new vscode.EventEmitter<void>();
@@ -175,6 +177,10 @@ export class AgentController implements vscode.Disposable {
 	}
 
 	prefill(text: string, append = true): void {
+		if (!this.ready) {
+			this.pendingPrefill.push({ text, append });
+			return;
+		}
 		this.post({ type: 'prefill', text, append });
 		this.post({ type: 'focus' });
 	}
@@ -206,6 +212,9 @@ export class AgentController implements vscode.Disposable {
 				this.ready = true;
 				this.post({ type: 'init', l10n: vscode.l10n.bundle, state: session.viewState(), items: session.transcript() });
 				session.refreshCommands();
+				for (const { text, append } of this.pendingPrefill.splice(0)) {
+					this.prefill(text, append);
+				}
 				break;
 			case 'send':
 				await session.send(message.text);

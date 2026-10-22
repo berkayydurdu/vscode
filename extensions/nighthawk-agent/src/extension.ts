@@ -17,6 +17,14 @@ import { InlineEditController } from './host/inlineEdit';
 import { branchReviewPrompt } from './core/commit';
 import { Checkpoints } from './host/checkpoints';
 import { CodebaseIndexer } from './host/codeIndex';
+import { Docs } from './host/docs';
+import { Preview } from './host/preview';
+import { Multibuffers } from './host/multibuffer';
+import { CodeMaps } from './host/codeMaps';
+import { StructuralSearch } from './host/structural';
+import { Macros } from './host/macros';
+import { Scratches, type ScratchItem } from './host/scratches';
+import { PullRequestReviews } from './host/prReview';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -37,6 +45,17 @@ export function activate(context: vscode.ExtensionContext): void {
 	const usage = new UsageMeter(context, () => !!endpoints.current());
 	const codeIndex = new CodebaseIndexer(context, endpoints, usage, workspaceKey());
 	const memories = new Memories(context.globalStorageUri, workspaceKey());
+	const docs = new Docs(context.globalStorageUri, () => codeIndex.docsEmbedder());
+	const preview = new Preview(context, async text => (await view.show()).prefill(text));
+	const multibuffers = new Multibuffers();
+	const structural = new StructuralSearch(multibuffers);
+	const macros = new Macros(context.globalState);
+	const scratches = new Scratches(context);
+	const codeMaps = new CodeMaps(context, workspaceKey(), async (shown, prompt) => {
+		const controller = await view.show();
+		controller.startNew();
+		await controller.session.sendTask(shown, prompt);
+	}, async text => (await view.show()).prefill(text));
 	const host: ControllerHost = {
 		context,
 		endpoints,
@@ -44,6 +63,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		usage,
 		codeIndex,
 		memories,
+		docs,
+		preview,
+		codeMaps,
 		checkpoints: new Checkpoints(context.globalStorageUri),
 		store: new SessionStore(context.globalStorageUri, workspaceKey()),
 		diffs: diffs.provider,
@@ -56,6 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		controller.startNew();
 		await controller.session.sendTask(shown, prompt);
 	});
+	const prReviews = new PullRequestReviews(context, endpoints, usage);
 	const inlineEdit = new InlineEditController(context, endpoints, usage);
 	const autocomplete = new Autocomplete(endpoints, usage, () => inlineEdit.model());
 	const specs = new Specs(() => view.show());
@@ -73,7 +96,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, memories, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, macros, scratches, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -190,6 +213,35 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.index.menu', () => codeIndex.menu()),
 		vscode.commands.registerCommand('nighthawk.index.rebuild', () => codeIndex.rebuild()),
 		vscode.commands.registerCommand('nighthawk.index.selectEmbeddingModel', () => codeIndex.pickEmbeddingModel()),
+		vscode.commands.registerCommand('nighthawk.docs.add', (url?: unknown) => docs.add(typeof url === 'string' ? url : undefined)),
+		vscode.commands.registerCommand('nighthawk.docs.manage', () => docs.manage()),
+		vscode.commands.registerCommand('nighthawk.docs.search', () => docs.searchCommand()),
+		vscode.commands.registerCommand('nighthawk.preview.open', (url?: unknown) => preview.open(typeof url === 'string' ? url : undefined)),
+		vscode.commands.registerCommand('nighthawk.preview.pick', () => preview.pick()),
+		vscode.commands.registerCommand('nighthawk.preview.reload', () => preview.reload()),
+		vscode.commands.registerCommand('nighthawk.multibuffer.search', (query?: unknown) => multibuffers.search(typeof query === 'string' ? query : undefined)),
+		vscode.commands.registerCommand('nighthawk.multibuffer.references', () => multibuffers.references()),
+		vscode.commands.registerCommand('nighthawk.multibuffer.problems', () => multibuffers.problems()),
+		vscode.commands.registerCommand('nighthawk.multibuffer.openSource', (uri?: vscode.Uri, line?: number) => multibuffers.openSource(uri instanceof vscode.Uri ? uri : undefined, typeof line === 'number' ? line : undefined)),
+		vscode.commands.registerCommand('nighthawk.multibuffer.reload', () => multibuffers.reload()),
+		vscode.commands.registerCommand('nighthawk.codeMap.new', (question?: unknown) => codeMaps.create(typeof question === 'string' ? question : undefined)),
+		vscode.commands.registerCommand('nighthawk.codeMap.open', () => codeMaps.pick()),
+		vscode.commands.registerCommand('nighthawk.structural.run', () => structural.run()),
+		vscode.commands.registerCommand('nighthawk.prReview.run', (number?: unknown) => prReviews.review(typeof number === 'number' ? number : undefined)),
+		vscode.commands.registerCommand('nighthawk.prReview.setUpBot', () => prReviews.setUpBot()),
+		vscode.commands.registerCommand('nighthawk.scratch.new', () => scratches.create()),
+		vscode.commands.registerCommand('nighthawk.scratch.newFromSelection', () => scratches.createFromSelection()),
+		vscode.commands.registerCommand('nighthawk.scratch.run', (target?: vscode.Uri | ScratchItem) => scratches.runFile(target)),
+		vscode.commands.registerCommand('nighthawk.scratch.rename', (item?: ScratchItem) => scratches.rename(item)),
+		vscode.commands.registerCommand('nighthawk.scratch.delete', (item?: ScratchItem) => scratches.delete(item)),
+		vscode.commands.registerCommand('nighthawk.scratch.revealFolder', () => scratches.revealFolder()),
+		vscode.commands.registerCommand('nighthawk.macro.toggleRecording', () => macros.toggle()),
+		vscode.commands.registerCommand('nighthawk.macro.play', () => macros.play()),
+		vscode.commands.registerCommand('nighthawk.macro.playTimes', () => macros.playTimes()),
+		vscode.commands.registerCommand('nighthawk.macro.playEachLine', () => macros.playEachLine()),
+		vscode.commands.registerCommand('nighthawk.macro.save', () => macros.save()),
+		vscode.commands.registerCommand('nighthawk.macro.run', (args?: { name?: unknown }) => macros.runSaved(args)),
+		vscode.commands.registerCommand('nighthawk.macro.wrap', (args?: { command: string; args?: unknown; edit?: boolean }) => macros.wrap(args)),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

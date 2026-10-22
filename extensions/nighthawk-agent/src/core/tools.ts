@@ -11,7 +11,10 @@ import * as path from 'node:path';
 import { diffLines } from './diff';
 import { globToRegExp, SKIPPED_DIRS } from './glob';
 import { formatResults, type SearchOptions, type SearchResult } from './indexing';
+import { checkCodeMap, CODE_MAP_SCHEMA, type CodeMap } from './codemap';
+import { formatDocResults, type DocResult } from './docs';
 import { looksSecret, type MemoryScope } from './memories';
+import { findMatches, parsePattern } from './structural';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
 import type { Question, Todo, ToolDisplay } from './protocol';
 import type { ToolSpec } from './types';
@@ -88,8 +91,12 @@ export interface ToolContext {
 	readSkill?(name: string): Promise<{ body: string; dir: string } | undefined>;
 	/** Searches the codebase index; absent when indexing is off. */
 	searchCodebase?(query: string, options: SearchOptions, signal: AbortSignal): Promise<CodebaseSearchResult>;
+	/** Searches the documentation the user added; absent when there is none. */
+	searchDocs?(query: string, sources: string[], signal: AbortSignal): Promise<DocResult[]>;
 	/** Saves, changes or deletes a memory and says what happened; absent when memories are off. */
 	memory?(change: MemoryChange): Promise<string>;
+	/** Shows a code map to the user; absent where there is no editor to show it in. */
+	showCodeMap?(map: CodeMap): Promise<void>;
 }
 
 export type MemoryChange =
@@ -629,6 +636,82 @@ const grepTool: Tool = {
 	},
 };
 
+// --- StructuralSearch
+
+const structuralSearchTool: Tool = {
+	kind: 'read',
+	parallel: true,
+	spec: {
+		name: 'StructuralSearch',
+		description: [
+			'Finds code by its structure rather than its text: spacing, line breaks and comments do not matter, and holes stand for code.',
+			'$NAME matches one expression or argument, $$$NAME any number of them (also whole statements inside brackets), $_ and $$$ match without a name; a name used twice must match the same code.',
+			'Examples: "console.log($$$ARGS)", "useEffect($FN, [])", "if ($X) { return $X; }", "fetch($URL, { $$$OPTS })".',
+			'Use it instead of Grep for patterns that span lines or nest, e.g. every call with a given argument shape. Returns each match with what the holes matched.',
+		].join('\n'),
+		inputSchema: {
+			type: 'object',
+			properties: {
+				pattern: { type: 'string', description: 'The code pattern with $HOLES.' },
+				path: { type: 'string', description: 'File or folder to search. Defaults to the working directory.' },
+				glob: { type: 'string', description: 'Only search files matching this glob, e.g. "*.{ts,tsx}".' },
+			},
+			required: ['pattern'],
+			additionalProperties: false,
+		},
+	},
+	title: input => `Structural search ${JSON.stringify(str(input, 'pattern', false))}${input.glob ? ` in ${input.glob}` : ''}`,
+	paths: (input, ws) => [resolvePath(ws, str(input, 'path', false) || '.')],
+	async run(input, ctx) {
+		let pattern;
+		try {
+			pattern = parsePattern(str(input, 'pattern'));
+		} catch (err) {
+			throw new ToolError((err as Error).message);
+		}
+		const target = resolvePath(ctx.workspace, str(input, 'path', false) || '.');
+		const glob = typeof input.glob === 'string' && input.glob ? input.glob : undefined;
+		const stat = await ctx.workspace.stat(target);
+		let files: string[] = [];
+		if (stat && !stat.isDirectory) {
+			files = [target];
+		} else if (ctx.ripgrep) {
+			const args = ['--hidden', '--glob', '!.git', ...(glob ? ['--glob', glob] : []), ...(pattern.anchor ? ['-l', '--fixed-strings', '-e', pattern.anchor.replace(/^['"`]|['"`]$/g, '')] : ['--files']), '--', target];
+			files = (await runRipgrep(ctx.ripgrep, args, ctx.workspace.roots[0] ?? target, ctx.signal)).split(/\r?\n/).filter(Boolean).map(f => path.resolve(target, f));
+		} else {
+			const re = glob ? globToRegExp(glob, process.platform === 'win32') : undefined;
+			for await (const file of walk(ctx.workspace, target, ctx.signal)) {
+				if (!re || re.test(toSlash(path.relative(target, file))) || re.test(path.basename(file))) {
+					files.push(file);
+				}
+			}
+		}
+		const lines: string[] = [];
+		let count = 0;
+		for (const file of files.slice(0, 5000)) {
+			if (ctx.signal.aborted || count >= 200) {
+				break;
+			}
+			const stats = await ctx.workspace.stat(file);
+			if (!stats || stats.size > 1024 * 1024) {
+				continue;
+			}
+			const text = await ctx.workspace.readText(file).catch(() => '');
+			for (const match of findMatches(pattern, text, file, 200 - count)) {
+				count++;
+				const line = text.slice(0, match.start).split('\n').length;
+				const holes = Object.entries(match.bindings).map(([name, value]) => `$${name} = ${value.replace(/\s+/g, ' ').trim().slice(0, 120)}`).join('; ');
+				lines.push(`${displayPath(ctx.workspace, file)}:${line}: ${match.text.replace(/\s+/g, ' ').slice(0, 200)}${holes ? `\n    ${holes}` : ''}`);
+			}
+		}
+		if (!count) {
+			return { content: 'No matches found.', summary: '0 matches' };
+		}
+		const more = count >= 200 ? '\n(Stopped at 200 matches; narrow the path or glob.)' : '';
+		return { content: truncateOutput(lines.join('\n')) + more, summary: `${count} matches` };
+	},
+};
+
 async function jsGrep(ctx: ToolContext, pattern: string, target: string, mode: string, input: Record<string, unknown>): Promise<string[]> {
 	let re: RegExp;
 	try {
@@ -726,6 +809,83 @@ const codebaseSearchTool: Tool = {
 			display: { kind: 'files', files: found.results.map(r => `${displayPath(ctx.workspace, r.file)}:${r.start}-${r.end}`) },
 			summary: `${found.results.length} results`,
 		};
+	},
+};
+
+// --- DocsSearch
+
+const docsSearchTool: Tool = {
+	kind: 'read',
+	parallel: true,
+	spec: {
+		name: 'DocsSearch',
+		description: '',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				query: { type: 'string', description: 'What you want to know, as a question or the API names involved.' },
+				sources: { type: 'array', items: { type: 'string' }, description: 'Which documentation to search, by name (default all).' },
+			},
+			required: ['query'],
+			additionalProperties: false,
+		},
+	},
+	title: input => `Search docs for ${JSON.stringify(str(input, 'query', false))}`,
+	async run(input, ctx) {
+		if (!ctx.searchDocs) {
+			throw new ToolError('No documentation has been added. Use WebFetch instead.');
+		}
+		const sources = Array.isArray(input.sources) ? input.sources.map(String) : typeof input.sources === 'string' ? [input.sources] : [];
+		const results = await ctx.searchDocs(str(input, 'query'), sources, ctx.signal);
+		if (!results.length) {
+			return { content: 'Nothing found in the documentation. Try other words, or WebFetch a page.', summary: '0 results' };
+		}
+		return {
+			content: formatDocResults(results),
+			display: { kind: 'files', files: results.map(r => `${r.source}: ${r.title}${r.heading ? ` > ${r.heading}` : ''}`) },
+			summary: `${results.length} results`,
+		};
+	},
+};
+
+/** The DocsSearch description, naming the documentation the user added. */
+export function docsSearchDescription(names: string[]): string {
+	return [
+		'Searches documentation the user added to Nighthawk, which is current and more reliable than what you remember about these libraries. Use it before writing code against them, and when the user mentions @docs:Name.',
+		`Documentation available: ${names.join(', ')}.`,
+		'Returns the most relevant sections with their URLs; WebFetch a URL to read the whole page. Mention the URLs you relied on in your answer.',
+	].join('\n');
+}
+
+// --- CodeMap
+
+const codeMapTool: Tool = {
+	kind: 'read',
+	spec: {
+		name: 'CodeMap',
+		description: [
+			'Shows the user a code map: a diagram and outline of the code locations that answer a question about how something works, each with a note, grouped in sections, with arrows for calls and data flow.',
+			'Use it when the user asks for a code map, or asks how a feature or flow works across several files and a map would explain it better than prose. Explore first and only include locations you have read.',
+		].join('\n'),
+		inputSchema: CODE_MAP_SCHEMA,
+	},
+	title: input => `Code map: ${str(input, 'title', false)}`,
+	async run(input, ctx) {
+		if (!ctx.showCodeMap) {
+			throw new ToolError('Code maps cannot be shown here. Answer in text instead.');
+		}
+		const question = str(input, 'question', false) || str(input, 'title', false);
+		const { map, problems } = await checkCodeMap(input, question, async file => {
+			const text = await ctx.workspace.readText(resolvePath(ctx.workspace, file)).catch(() => undefined);
+			return text === undefined ? undefined : text.split(/\r?\n/).length;
+		});
+		const count = map.sections.reduce((sum, s) => sum + s.items.length, 0);
+		if (!count) {
+			throw new ToolError(`The map has no valid locations. ${problems.join(' ')}`);
+		}
+		await ctx.showCodeMap(map);
+		const left = problems.length ? `\nLeft out: ${problems.join(' ')} Call CodeMap again with fixes if these matter.` : '';
+		return { content: `The map is shown to the user: ${count} locations in ${map.sections.length} sections.${left}`, summary: `${count} locations` };
 	},
 };
 
@@ -1217,13 +1377,13 @@ const exitPlanTool: Tool = {
 };
 
 export const BUILTIN_TOOLS: Tool[] = [
-	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool,
-	memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
+	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, structuralSearchTool, codebaseSearchTool, docsSearchTool,
+	codeMapTool, memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 
 /** Tools a read-only sub-agent may use. */
-export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'WebFetch', 'BashOutput', 'Skill']);
+export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'StructuralSearch', 'CodebaseSearch', 'DocsSearch', 'WebFetch', 'BashOutput', 'Skill']);
 
 export function isOutsideWorkspace(tool: Tool, input: Record<string, unknown>, workspace: Workspace): boolean {
 	try {

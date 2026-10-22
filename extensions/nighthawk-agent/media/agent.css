@@ -448,6 +448,10 @@ kbd {
 	cursor: pointer;
 }
 
+.mention:not(.file-link) {
+	cursor: default;
+}
+
 /* Markdown */
 
 .markdown {

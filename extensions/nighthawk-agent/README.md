@@ -144,6 +144,82 @@ Nighthawk keeps an index of the workspace's code on your computer, so the agent 
 
 **Embedding models.** Finding code by meaning needs an embedding model, which `nighthawk.index.embeddingModel` picks automatically from your endpoints: OpenAI (`text-embedding-3-small`), Gemini, Mistral, Voyage, or an embedding model installed in Ollama or LM Studio (for example `ollama pull nomic-embed-text`). Local models are used right away and cost nothing. Before code goes to a cloud model you did not pick yourself, Nighthawk asks once and says what it costs; after that only changed files are sent. Anthropic has no embedding models, so with only an Anthropic endpoint the index ranks by words and names, and the agent adds likely names and synonyms to its searches. Embedding requests are counted on the usage page under Codebase index.
 
+## Documentation
+
+**AI: Add Documentation...** takes the address of a library's docs, such as `https://react.dev/reference/react`, reads up to 300 pages under that folder of the site and keeps them searchable on your computer. The agent then looks things up with its DocsSearch tool before writing code against that library, instead of relying on what the model remembers, and cites the pages it used.
+
+- Mention `@docs:Name` in a message to have the sections that best match it attached, for example `@docs:React how do I clean up an effect?`.
+- **AI: Search Documentation...** searches the docs yourself and opens the page; **AI: Manage Documentation...** reads a source again, renames or removes it.
+- Sections are found by words, and by meaning too when the codebase index has an embedding model it may use (see Codebase index). Only public pages are read, and only the pages, never your code, are sent for embedding.
+
+## Live preview
+
+**AI: Open Live Preview...** shows your running dev server in an editor tab, next to the code. It finds servers on the usual ports (3000, 5173, 8080 and others) or takes any address.
+
+- **Pick Element**, then click something on the page: it is added to the agent as `@preview:1`, so you can write "@preview:1 make this green" without describing which button you mean. The agent gets the element's markup, selector, size and computed styles, its React or Vue component names and, when the framework reports it in development, the file and line it comes from.
+- Console errors on the page are counted in the toolbar; click the count to send them to the agent as `@preview:errors`.
+- The page keeps live reload, because the preview passes its WebSocket through. It runs through a small proxy on 127.0.0.1 that only talks to that one dev server and adds the picker script to its pages.
+
+## Code maps
+
+**AI: New Code Map...** (or `/map <question>` in the agent) asks a question such as "how does sign-in work?". The agent reads the code without changing it, then draws a map in an editor tab: a short answer, the parts involved in the order to read them, each location with a note, and arrows for calls and data flow. Click any entry to open the code beside the map.
+
+- **Ask a Follow-up** continues in the agent, **Copy as Markdown** puts the map in your clipboard for notes or a pull request, and **Draw Again** reruns it after the code changed.
+- The agent can also draw a map on its own when you ask how something works across several files. Locations are checked against the files, so the map never points at lines that do not exist.
+- **AI: Show Code Maps...** lists the maps made in this workspace.
+
+## Multibuffers
+
+A multibuffer shows excerpts from many files in one editable tab, each under a header naming its file and lines. Saving writes every changed excerpt back into its file. Because it is one document, multiple cursors, find and replace, and inline edit (Ctrl+I) work across all the files at once.
+
+- **Multibuffer: Search into Multibuffer...** puts every match of a search in one tab (wrap the text in slashes for a regular expression, like `/use\w+/`).
+- **Multibuffer: Open References in Multibuffer** (also in the editor's context menu) shows every reference to the symbol at the cursor; **Multibuffer: Open Problems in Multibuffer** shows every error and warning.
+- **Open File** above a header, or Alt+Enter, opens the file at that line.
+- If a file changed since the multibuffer read it, saving stops and says which; **Multibuffer: Reload Files** reads them again.
+
+## Structural search and replace
+
+**Search: Structural Search and Replace...** finds code by its shape instead of its text, as in JetBrains IDEs: spacing, line breaks and comments do not matter. In the pattern, `$NAME` stands for one expression or argument, `$$$NAME` for any number of them (whole statements too, inside brackets), and `$_` or `$$$` for anything you do not need to name. A name used twice must match the same code both times.
+
+| Find | Replace with |
+| --- | --- |
+| `console.log($$$ARGS)` | `logger.debug($$$ARGS)` |
+| `assertEquals($EXPECTED, $ACTUAL)` | `expect($ACTUAL).toBe($EXPECTED)` |
+| `if ($X) { return $X; }` | `return $X;` |
+
+- Leave the replacement empty to see every match in a multibuffer.
+- With a replacement, **Replace All** changes every file at once (Undo reverts it), and **Review Each** opens the refactor preview to tick the changes you want.
+- Comments inside a replaced hole are kept, and arguments on their own lines stay on their own lines.
+- The agent has the same search as its StructuralSearch tool, for questions like "every fetch call that passes options".
+
+## Keyboard macros
+
+Record a sequence of edits once and play it back, as in Emacs and Sublime Text.
+
+- **Ctrl+Alt+R** (Cmd+Alt+R on macOS) starts recording; the status bar shows a red **Recording macro** item with the steps so far. Press it again, or click the item, to stop.
+- **Ctrl+Alt+P** plays the last macro back at the cursor, or at every cursor when there are several.
+- **Macro: Play Back Last Macro Several Times...** repeats it, stopping early if a step fails. **Macro: Play Back Last Macro on Each Selected Line** runs it once at the start of every selected line.
+- A macro records typing, cursor moves and selections (arrows, word jumps, Home/End, Page Up/Down), deletes, Tab, multi-cursor keys (Ctrl+D, add cursor above or below), line commands (move, copy, delete, comment, indent), copy, cut, paste (from the clipboard at play back), undo and redo. Accepting a suggestion records the text it inserted, so playing back does not depend on the suggestion list.
+- **Macro: Save Last Macro...** keeps it under a name. **Macro: Run Saved Macro...** lists saved macros to run or delete; the keyboard button copies a keybinding for `nighthawk.macro.run` with the macro's name to paste into keybindings.json.
+- Macros cannot record while another extension, such as Vim, takes over typing.
+
+## Scratch files
+
+Throwaway files of any language that live outside your projects, as in JetBrains IDEs. Every workspace sees the same scratches.
+
+- **Scratch: New Scratch File...** asks for a language (JavaScript, TypeScript, Python, Go, Rust, Java, C#, C, C++, Ruby, shell and more) and opens a new file; languages that need a main function start with one. **Scratch: New Scratch File from Selection** (also in the editor's context menu) copies the selection into one.
+- The **Scratches** view in the Explorer lists them, newest first, to open, run, rename or delete.
+- The play button in a scratch file's title bar (or **Scratch: Run File**, which works on any file) saves and runs it in a terminal: output as it comes, typed input goes to the program, Ctrl+C stops it, and the exit code and time show at the end.
+- Files run with the usual command for their language: `node` (TypeScript too, on Node 22.6 or later), `python3`, `go run`, `rustc` then the program, `java`, `dotnet run`, `cc`, and so on. A `#!` line picks the program instead, and `nighthawk.scratch.runners` sets your own per extension, such as `{ "py": "uv run ${file}" }`.
+
+## Pull request reviews
+
+A reviewer for GitHub pull requests, like Cursor's Bugbot, using your own model.
+
+- **AI: Review Pull Request...** (also in the Source Control **...** menu) lists the repository's open pull requests, reads the one you pick (its diff and the changed files), and lists what the model found, worst first, all ticked. Untick what you disagree with, open a finding's line with its button, and press Enter: after you confirm, the rest are posted as one review, each comment on its line, with a suggestion GitHub can apply when the fix is one line. Signing in to GitHub is asked for the first time.
+- **AI: Set Up Automatic PR Reviews...** adds `.github/workflows/nighthawk-review.yml` and its script `.github/nighthawk/review.mjs` to the repository. Add your model's API key as the repository secret `NIGHTHAWK_REVIEW_API_KEY` and push: every push to a pull request gets reviewed, posting only findings that were not posted before. The repository variables `NIGHTHAWK_REVIEW_PROVIDER` (`anthropic` or `openai`), `NIGHTHAWK_REVIEW_MODEL` and `NIGHTHAWK_REVIEW_BASE_URL` change the model; pull requests from forks are skipped, as GitHub gives them no secrets.
+- Both read the repository's own rules from `.nighthawk/review.md` (or Cursor's `.cursor/BUGBOT.md`) on the pull request's branch, such as "every handler checks permissions".
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.

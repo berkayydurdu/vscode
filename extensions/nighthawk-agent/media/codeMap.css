@@ -1,0 +1,278 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+:root {
+	--radius: 8px;
+	--radius-small: 5px;
+	--fg: var(--vscode-foreground);
+	--muted: var(--vscode-descriptionForeground);
+	--border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.25)));
+	--surface: var(--vscode-editor-background);
+	--raised: color-mix(in srgb, var(--vscode-foreground) 4%, var(--surface));
+	--accent: var(--vscode-button-background, #0078d4);
+	--accent-fg: var(--vscode-button-foreground, #fff);
+	--link: var(--vscode-textLink-foreground, #3794ff);
+	--mono: var(--vscode-editor-font-family, monospace);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	color: var(--fg);
+	background: var(--surface);
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size, 13px);
+	line-height: 1.5;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	text-align: left;
+}
+
+button:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.map {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 28px clamp(16px, 4vw, 32px) 48px;
+}
+
+header {
+	margin-bottom: 24px;
+}
+
+.eyebrow {
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+h1 {
+	margin: 4px 0 6px;
+	font-size: 22px;
+	font-weight: 600;
+}
+
+.question {
+	margin: 0 0 10px;
+	color: var(--muted);
+}
+
+.summary {
+	max-width: 760px;
+	margin: 0 0 16px;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 12px;
+	color: var(--accent-fg);
+	background: var(--accent);
+	border-radius: var(--radius-small);
+}
+
+.button.secondary {
+	color: var(--fg);
+	background: var(--raised);
+	border: 1px solid var(--border);
+}
+
+.diagram {
+	position: relative;
+	overflow-x: auto;
+	padding: 20px;
+	margin-bottom: 28px;
+	background: var(--raised);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.columns {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	gap: 64px;
+	align-items: flex-start;
+}
+
+.column {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 150px;
+	max-width: 260px;
+}
+
+.column-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 2px;
+	font-weight: 600;
+}
+
+.step {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	color: var(--accent-fg);
+	background: var(--accent);
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.node {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-small);
+	transition: border-color 120ms ease-out, opacity 120ms ease-out;
+}
+
+.node:hover,
+.node.lit {
+	border-color: var(--accent);
+}
+
+.node-name {
+	overflow: hidden;
+	font-family: var(--mono);
+	font-size: 12px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.node-where {
+	overflow: hidden;
+	color: var(--muted);
+	font-size: 11px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.edges {
+	position: absolute;
+	top: 0;
+	left: 0;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.edge {
+	fill: none;
+	stroke: color-mix(in srgb, var(--fg) 35%, transparent);
+	stroke-width: 1.4;
+	transition: stroke 120ms ease-out, opacity 120ms ease-out;
+}
+
+.edge.lit {
+	stroke: var(--accent);
+	stroke-width: 2;
+}
+
+.arrowhead {
+	fill: color-mix(in srgb, var(--fg) 45%, transparent);
+}
+
+.edge-label {
+	fill: var(--muted);
+	font-size: 11px;
+	paint-order: stroke;
+	stroke: var(--raised);
+	stroke-width: 4px;
+}
+
+.dim {
+	opacity: 0.35;
+}
+
+.outline {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+	gap: 20px 28px;
+}
+
+.outline h2 {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 4px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.description {
+	margin: 0 0 8px;
+	color: var(--muted);
+}
+
+.outline ol {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.outline li {
+	padding: 8px 10px;
+	margin: 0 -10px;
+	border-radius: var(--radius-small);
+	transition: background 120ms ease-out, opacity 120ms ease-out;
+}
+
+.outline li.lit {
+	background: var(--raised);
+}
+
+.outline li p {
+	margin: 2px 0 0;
+}
+
+.location {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 8px;
+	color: var(--link);
+}
+
+.location code {
+	font-family: var(--mono);
+	font-size: 12px;
+}
+
+.where {
+	font-size: 12px;
+	opacity: 0.85;
+}

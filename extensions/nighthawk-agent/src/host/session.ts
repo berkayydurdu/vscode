@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 import { AcpClient, AcpError, contentText, externalAgents, pickOption, type AcpContent, type AcpMode, type AcpPermissionOption, type AcpToolCall, type AcpUpdate } from '../core/acp';
 import { Agent, type AgentEvent, type PermissionAnswer } from '../core/agent';
 import { diffLines } from '../core/diff';
+import { mapPrompt } from '../core/codemap';
+import { formatDocResults } from '../core/docs';
 import { Hooks } from '../core/hooks';
 import { decide, isSafeCommand, parseRule, PERMISSION_MODES, suggestRule, type PermissionMode, type Rule } from '../core/permissions';
 import type { HostMessage, Question, SlashCommandInfo, Todo, ToolDisplay, TranscriptItem, ViewState } from '../core/protocol';
@@ -18,7 +20,7 @@ import { guessContextWindow, modelStream } from '../core/providers';
 import { findShell, shellFromPath, type Shell } from '../core/shell';
 import { expandCommand, readSkillBody } from '../core/skills';
 import type { SearchOptions } from '../core/indexing';
-import { bashDescription, BUILTIN_TOOLS, SessionState, skillDescription, taskDescription, type CodebaseSearchResult, type Tool, type ToolContext, type ToolResult } from '../core/tools';
+import { bashDescription, BUILTIN_TOOLS, docsSearchDescription, SessionState, skillDescription, taskDescription, type CodebaseSearchResult, type Tool, type ToolContext, type ToolResult } from '../core/tools';
 import type { Message, ModelStream, Usage } from '../core/types';
 import { timeAgo } from '../core/checkpoints';
 import { displayPath, isInside, resolvePath } from '../core/workspace';
@@ -27,7 +29,10 @@ import type { Endpoints } from './endpoints';
 import type { Checkpoints, RestoreChoice } from './checkpoints';
 import type { CodebaseIndexer } from './codeIndex';
 import type { McpManager } from './mcpManager';
+import type { Docs } from './docs';
 import type { Memories } from './memories';
+import type { Preview } from './preview';
+import type { CodeMaps } from './codeMaps';
 import { findRipgrep, loadProject, locations, type Project } from './project';
 import { isBudgetError, type UsageMeter } from './usage';
 
@@ -42,6 +47,12 @@ export interface Services {
 	codeIndex?: CodebaseIndexer;
 	/** The agent's saved memories. */
 	memories?: Memories;
+	/** Documentation the user added, for the DocsSearch tool and @docs mentions. */
+	docs?: Docs;
+	/** The live preview, for @preview mentions of picked elements and console errors. */
+	preview?: Preview;
+	/** Shows maps from the CodeMap tool. */
+	codeMaps?: CodeMaps;
 	/** Shows the agent, e.g. when a call needs approval while it is hidden. */
 	reveal(): void;
 	isVisible(): boolean;
@@ -107,6 +118,7 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
 	{ name: 'spec', description: 'Write requirements, a design and tasks for you to approve, then build it task by task', hint: '<what to build>' },
 	{ name: 'memory', description: 'Open the project\'s AGENTS.md instructions' },
 	{ name: 'memories', description: 'Show, edit or forget what the agent remembers' },
+	{ name: 'map', description: 'Draw a code map: the code that answers a question and how it connects', hint: '<question>' },
 	{ name: 'skills', description: 'List the available skills' },
 	{ name: 'agents', description: 'List the sub-agents' },
 	{ name: 'mcp', description: 'Show MCP servers and restart them' },
@@ -148,7 +160,7 @@ function agentMode(modes: AcpMode[], mode: PermissionMode): string | undefined {
 }
 
 /** Tools a sub-agent never gets: they talk to the user or would nest agents. */
-const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'Memory']);
+const SUBAGENT_EXCLUDED = new Set(['Task', 'TodoWrite', 'AskUserQuestion', 'ExitPlanMode', 'Memory', 'CodeMap']);
 
 function newId(prefix: string): string {
 	return `${prefix}_${randomUUID().slice(0, 8)}`;
@@ -438,12 +450,27 @@ export class Session implements vscode.Disposable {
 		await this.run();
 	}
 
-	/** Turns @path mentions into attached file contents. */
+	/** Turns @path mentions into attached file contents, and @docs:Name into what those docs say about the message. */
 	private async attachMentions(text: string): Promise<string | undefined> {
 		const parts: string[] = [];
 		const seen = new Set<string>();
+		const docs: string[] = [];
 		for (const match of text.matchAll(/(?:^|\s)@([^\s]+)/g)) {
 			let ref = match[1].replace(/[.,;:!?)]+$/, '');
+			const docsMention = /^docs:(?<name>.+)$/i.exec(ref);
+			if (docsMention?.groups) {
+				docs.push(docsMention.groups.name);
+				continue;
+			}
+			const previewMention = /^preview:(?<ref>\d+|errors)$/i.exec(ref);
+			if (previewMention?.groups) {
+				const context = !seen.has(ref) && this.services.preview?.mention(previewMention.groups.ref.toLowerCase());
+				seen.add(ref);
+				if (context) {
+					parts.push(context);
+				}
+				continue;
+			}
 			let range: [number, number] | undefined;
 			const lines = /#L(\d+)(?:-L?(\d+))?$/.exec(ref);
 			if (lines) {
@@ -474,7 +501,32 @@ export class Session implements vscode.Disposable {
 			}
 			parts.push(`<file path="${file}"${range ? ` lines="${range[0]}-${range[1]}"` : ''}>\n${content}\n</file>`);
 		}
+		const docsPart = docs.length ? await this.docsMentions(text, docs) : undefined;
+		if (docsPart) {
+			parts.push(docsPart);
+		}
 		return parts.length ? `The user attached:\n${parts.join('\n')}` : undefined;
+	}
+
+	/** Searches the mentioned docs for the message, so the answer starts from them. */
+	private async docsMentions(text: string, mentioned: string[]): Promise<string | undefined> {
+		const docs = this.services.docs;
+		const names = await docs?.names() ?? [];
+		// Mentions drop spaces from names: @docs:NextJs is "Next Js".
+		const squash = (name: string) => name.replace(/\s+/g, '').toLowerCase();
+		const sources = names.filter(name => mentioned.some(m => squash(m) === squash(name)));
+		const unknown = mentioned.filter(m => !names.some(name => squash(m) === squash(name)));
+		if (unknown.length) {
+			this.notice('warning', vscode.l10n.t('No documentation named {0}. Add it with AI: Add Documentation...', unknown.join(', ')));
+		}
+		const query = text.replace(/(?:^|\s)@docs:\S+/gi, ' ').trim();
+		if (!docs || !sources.length || !query) {
+			return undefined;
+		}
+		const results = await docs.search(query, sources, new AbortController().signal).catch(() => []);
+		return results.length
+			? `<docs sources="${sources.join(', ')}">\n${formatDocResults(results.slice(0, 6))}\n</docs>\nSearch these docs further with DocsSearch.`
+			: `<docs sources="${sources.join(', ')}">Nothing matched this message; search them with DocsSearch.</docs>`;
 	}
 
 	/** Returns false when the text is not a command after all. */
@@ -508,6 +560,11 @@ export class Session implements vscode.Disposable {
 				return;
 			case 'spec':
 				return void vscode.commands.executeCommand('nighthawk.spec.new', args.trim() || undefined);
+			case 'map':
+				if (!args.trim()) {
+					return void vscode.commands.executeCommand('nighthawk.codeMap.new');
+				}
+				return this.startTurn(text, mapPrompt(args.trim()));
 			case 'memory':
 				return void this.openMemory();
 			case 'memories':
@@ -659,7 +716,7 @@ export class Session implements vscode.Disposable {
 		};
 	}
 
-	private tools(project: Project, mcpTools: Tool[]): Tool[] {
+	private tools(project: Project, mcpTools: Tool[], docs: string[]): Tool[] {
 		const platform = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
 		const tools: Tool[] = [];
 		for (const tool of BUILTIN_TOOLS) {
@@ -676,10 +733,17 @@ export class Session implements vscode.Disposable {
 			if (name === 'Memory' && !this.services.memories?.enabled()) {
 				continue;
 			}
+			if (name === 'DocsSearch' && !docs.length) {
+				continue;
+			}
+			if (name === 'CodeMap' && !this.services.codeMaps) {
+				continue;
+			}
 			const description = name === 'Bash' ? bashDescription(this.shell, platform)
 				: name === 'Task' ? taskDescription(project.agents)
 					: name === 'Skill' ? skillDescription(project.skills)
-						: tool.spec.description;
+						: name === 'DocsSearch' ? docsSearchDescription(docs)
+							: tool.spec.description;
 			tools.push({ ...tool, spec: { ...tool.spec, description } });
 		}
 		tools.push(diagnosticsTool(), ...mcpTools);
@@ -724,7 +788,8 @@ export class Session implements vscode.Disposable {
 			const project = this.project = await loadProject(this.roots);
 			this.shell = await findShell(this.shellSetting());
 			this.workspace.roots.splice(0, this.workspace.roots.length, ...locations(this.roots).roots);
-			const tools = this.tools(project, this.services.mcp.tools());
+			const docs = this.services.docs;
+			const tools = this.tools(project, this.services.mcp.tools(), await docs?.names() ?? []);
 			const hooks = new Hooks(project.hooks, this.shell, this.workspace.roots[0] ?? process.cwd(), this.id);
 			const promptContext = {
 				roots: this.workspace.roots,
@@ -759,6 +824,8 @@ export class Session implements vscode.Disposable {
 					return skill ? { body: await readSkillBody(skill), dir: skill.dir } : undefined;
 				},
 				searchCodebase: (query, options, searchSignal) => this.searchCodebase(query, options, searchSignal),
+				searchDocs: docs && ((query, sources, searchSignal) => docs.search(query, sources, searchSignal)),
+				showCodeMap: this.services.codeMaps && (map => this.services.codeMaps!.show(map)),
 				memory: memories && (change => memories.apply(change, this.title || undefined)),
 				runSubagent: (type, _description, prompt, callId, subSignal) => this.runSubagent({ type, prompt, callId, signal: subSignal, project, tools, hooks, promptContext, context }),
 			};

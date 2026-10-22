@@ -399,6 +399,19 @@
             "markdownDescription": "%config.index.maxFiles%"
           }
         }
+      },
+      {
+        "title": "%config.scratch.title%",
+        "properties": {
+          "nighthawk.scratch.runners": {
+            "type": "object",
+            "default": {},
+            "additionalProperties": {
+              "type": "string"
+            },
+            "markdownDescription": "%config.scratch.runners%"
+          }
+        }
       }
     ],
     "viewsContainers": {
@@ -424,12 +437,24 @@
           "icon": "$(layers)",
           "visibility": "collapsed"
         }
+      ],
+      "explorer": [
+        {
+          "id": "nighthawk.scratches",
+          "name": "%view.scratches%",
+          "icon": "$(notebook)",
+          "visibility": "collapsed"
+        }
       ]
     },
     "viewsWelcome": [
       {
         "view": "nighthawk.agent.background",
         "contents": "%view.background.welcome%"
+      },
+      {
+        "view": "nighthawk.scratches",
+        "contents": "%view.scratches.welcome%"
       }
     ],
     "commands": [
@@ -713,10 +738,171 @@
         "command": "nighthawk.index.selectEmbeddingModel",
         "title": "%command.index.selectEmbeddingModel%",
         "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.add",
+        "title": "%command.docs.add%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.manage",
+        "title": "%command.docs.manage%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.docs.search",
+        "title": "%command.docs.search%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.preview.open",
+        "title": "%command.preview.open%",
+        "category": "%category.ai%",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "nighthawk.preview.pick",
+        "title": "%command.preview.pick%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.preview.reload",
+        "title": "%command.preview.reload%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.codeMap.new",
+        "title": "%command.codeMap.new%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.codeMap.open",
+        "title": "%command.codeMap.open%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.structural.run",
+        "title": "%command.structural.run%",
+        "category": "%category.search%"
+      },
+      {
+        "command": "nighthawk.prReview.run",
+        "title": "%command.prReview.run%",
+        "category": "%category.ai%",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "nighthawk.prReview.setUpBot",
+        "title": "%command.prReview.setUpBot%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.scratch.new",
+        "title": "%command.scratch.new%",
+        "category": "%category.scratch%",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "nighthawk.scratch.newFromSelection",
+        "title": "%command.scratch.newFromSelection%",
+        "category": "%category.scratch%"
+      },
+      {
+        "command": "nighthawk.scratch.run",
+        "title": "%command.scratch.run%",
+        "category": "%category.scratch%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nighthawk.scratch.rename",
+        "title": "%command.scratch.rename%",
+        "category": "%category.scratch%"
+      },
+      {
+        "command": "nighthawk.scratch.delete",
+        "title": "%command.scratch.delete%",
+        "category": "%category.scratch%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "nighthawk.scratch.revealFolder",
+        "title": "%command.scratch.revealFolder%",
+        "category": "%category.scratch%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "nighthawk.macro.toggleRecording",
+        "title": "%command.macro.toggleRecording%",
+        "category": "%category.macro%",
+        "icon": "$(record)"
+      },
+      {
+        "command": "nighthawk.macro.play",
+        "title": "%command.macro.play%",
+        "category": "%category.macro%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "nighthawk.macro.playTimes",
+        "title": "%command.macro.playTimes%",
+        "category": "%category.macro%"
+      },
+      {
+        "command": "nighthawk.macro.playEachLine",
+        "title": "%command.macro.playEachLine%",
+        "category": "%category.macro%"
+      },
+      {
+        "command": "nighthawk.macro.save",
+        "title": "%command.macro.save%",
+        "category": "%category.macro%"
+      },
+      {
+        "command": "nighthawk.macro.run",
+        "title": "%command.macro.run%",
+        "category": "%category.macro%"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "title": "%command.macro.wrap%",
+        "category": "%category.macro%"
+      },
+      {
+        "command": "nighthawk.multibuffer.search",
+        "title": "%command.multibuffer.search%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.references",
+        "title": "%command.multibuffer.references%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.problems",
+        "title": "%command.multibuffer.problems%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.openSource",
+        "title": "%command.multibuffer.openSource%",
+        "category": "%category.multibuffer%"
+      },
+      {
+        "command": "nighthawk.multibuffer.reload",
+        "title": "%command.multibuffer.reload%",
+        "category": "%category.multibuffer%"
       }
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "nighthawk.multibuffer.openSource",
+          "when": "resourceScheme == nighthawk-multibuffer"
+        },
+        {
+          "command": "nighthawk.multibuffer.reload",
+          "when": "resourceScheme == nighthawk-multibuffer"
+        },
         {
           "command": "nighthawk.spec.approve",
           "when": "false"
@@ -784,6 +970,18 @@
         {
           "command": "nighthawk.inlineEdit.start",
           "when": "editorIsOpen && !editorReadonly"
+        },
+        {
+          "command": "nighthawk.macro.wrap",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.scratch.rename",
+          "when": "false"
+        },
+        {
+          "command": "nighthawk.scratch.delete",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -826,6 +1024,16 @@
           "command": "nighthawk.agent.restartMcp",
           "when": "view == nighthawk.agent.chat",
           "group": "1_settings@2"
+        },
+        {
+          "command": "nighthawk.scratch.new",
+          "when": "view == nighthawk.scratches",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.scratch.revealFolder",
+          "when": "view == nighthawk.scratches",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -878,6 +1086,26 @@
           "command": "nighthawk.agent.background.discard",
           "when": "view == nighthawk.agent.background",
           "group": "3_remove@1"
+        },
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "inline@1"
+        },
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "1_run@1"
+        },
+        {
+          "command": "nighthawk.scratch.rename",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "nighthawk.scratch.delete",
+          "when": "view == nighthawk.scratches && viewItem == scratch",
+          "group": "2_edit@2"
         }
       ],
       "scm/inputBox": [
@@ -891,6 +1119,16 @@
           "command": "nighthawk.agent.reviewBranch",
           "when": "scmProvider == git",
           "group": "navigation@50"
+        },
+        {
+          "command": "nighthawk.prReview.run",
+          "when": "scmProvider == git",
+          "group": "9_nighthawk@2"
+        },
+        {
+          "command": "nighthawk.prReview.setUpBot",
+          "when": "scmProvider == git",
+          "group": "9_nighthawk@3"
         }
       ],
       "terminal/context": [
@@ -906,6 +1144,11 @@
       ],
       "editor/context": [
         {
+          "command": "nighthawk.multibuffer.references",
+          "when": "editorHasReferenceProvider",
+          "group": "navigation@99"
+        },
+        {
           "command": "nighthawk.inlineEdit.start",
           "when": "!editorReadonly",
           "group": "nighthawk@0"
@@ -917,10 +1160,27 @@
         {
           "command": "nighthawk.agent.fixProblems",
           "group": "nighthawk@2"
+        },
+        {
+          "command": "nighthawk.scratch.newFromSelection",
+          "when": "editorHasSelection",
+          "group": "9_cutcopypaste@9"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "nighthawk.scratch.run",
+          "when": "resourcePath in nighthawk.scratchFiles",
+          "group": "navigation@0"
         }
       ]
     },
     "keybindings": [
+      {
+        "command": "nighthawk.multibuffer.openSource",
+        "key": "alt+enter",
+        "when": "editorTextFocus && resourceScheme == nighthawk-multibuffer"
+      },
       {
         "command": "nighthawk.agent.open",
         "key": "ctrl+escape",
@@ -971,6 +1231,525 @@
         "command": "editor.action.inlineSuggest.trigger",
         "key": "alt+\\",
         "when": "editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.toggleRecording",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus || nighthawk.macro.recording"
+      },
+      {
+        "command": "nighthawk.macro.play",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "when": "editorTextFocus && !nighthawk.macro.recording"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorLeft"
+        },
+        "key": "left",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorRight"
+        },
+        "key": "right",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorUp"
+        },
+        "key": "up",
+        "when": "nighthawk.macro.recording && editorTextFocus && !suggestWidgetVisible && !parameterHintsMultipleSignatures"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorDown"
+        },
+        "key": "down",
+        "when": "nighthawk.macro.recording && editorTextFocus && !suggestWidgetVisible && !parameterHintsMultipleSignatures"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorLeftSelect"
+        },
+        "key": "shift+left",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorRightSelect"
+        },
+        "key": "shift+right",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorUpSelect"
+        },
+        "key": "shift+up",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorDownSelect"
+        },
+        "key": "shift+down",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorWordLeft"
+        },
+        "key": "ctrl+left",
+        "mac": "alt+left",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorWordEndRight"
+        },
+        "key": "ctrl+right",
+        "mac": "alt+right",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorWordLeftSelect"
+        },
+        "key": "ctrl+shift+left",
+        "mac": "alt+shift+left",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorWordEndRightSelect"
+        },
+        "key": "ctrl+shift+right",
+        "mac": "alt+shift+right",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorHome"
+        },
+        "key": "home",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorEnd"
+        },
+        "key": "end",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorHomeSelect"
+        },
+        "key": "shift+home",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorEndSelect"
+        },
+        "key": "shift+end",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorHome"
+        },
+        "key": "cmd+left",
+        "when": "nighthawk.macro.recording && editorTextFocus && isMac"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorEnd"
+        },
+        "key": "cmd+right",
+        "when": "nighthawk.macro.recording && editorTextFocus && isMac"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorHomeSelect"
+        },
+        "key": "cmd+shift+left",
+        "when": "nighthawk.macro.recording && editorTextFocus && isMac"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorEndSelect"
+        },
+        "key": "cmd+shift+right",
+        "when": "nighthawk.macro.recording && editorTextFocus && isMac"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorTop"
+        },
+        "key": "ctrl+home",
+        "mac": "cmd+up",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorBottom"
+        },
+        "key": "ctrl+end",
+        "mac": "cmd+down",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorTopSelect"
+        },
+        "key": "ctrl+shift+home",
+        "mac": "cmd+shift+up",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorBottomSelect"
+        },
+        "key": "ctrl+shift+end",
+        "mac": "cmd+shift+down",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorPageUp"
+        },
+        "key": "pageup",
+        "when": "nighthawk.macro.recording && editorTextFocus && !suggestWidgetVisible && !parameterHintsMultipleSignatures"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cursorPageDown"
+        },
+        "key": "pagedown",
+        "when": "nighthawk.macro.recording && editorTextFocus && !suggestWidgetVisible && !parameterHintsMultipleSignatures"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "deleteLeft"
+        },
+        "key": "backspace",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "deleteLeft"
+        },
+        "key": "shift+backspace",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "deleteRight"
+        },
+        "key": "delete",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "deleteWordLeft"
+        },
+        "key": "ctrl+backspace",
+        "mac": "alt+backspace",
+        "when": "nighthawk.macro.recording && editorTextFocus && !nighthawk.inlineEdit.reviewing"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "deleteWordRight"
+        },
+        "key": "ctrl+delete",
+        "mac": "alt+delete",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "tab"
+        },
+        "key": "tab",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly && !editorTabMovesFocus && !suggestWidgetVisible && !inSnippetMode && !inlineSuggestionVisible && !inlineEditIsVisible && !hasSnippetCompletions"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "outdent"
+        },
+        "key": "shift+tab",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly && !editorTabMovesFocus && !inSnippetMode && !inlineEditIsVisible"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "acceptSelectedSuggestion",
+          "edit": true
+        },
+        "key": "tab",
+        "when": "nighthawk.macro.recording && editorTextFocus && suggestWidgetVisible"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "acceptSelectedSuggestion",
+          "edit": true
+        },
+        "key": "enter",
+        "when": "nighthawk.macro.recording && editorTextFocus && suggestWidgetVisible && acceptSuggestionOnEnter && suggestionMakesTextEdit"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.inlineSuggest.commit",
+          "edit": true
+        },
+        "key": "tab",
+        "when": "nighthawk.macro.recording && editorTextFocus && inlineSuggestionVisible && inlineSuggestionHasIndentationLessThanTabSize && !editor.hasSelection && !suggestWidgetVisible && !editorHoverFocused && !editorTabMovesFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.insertLineAfter"
+        },
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly && !nighthawk.inlineEdit.reviewing"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.insertLineBefore"
+        },
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.addSelectionToNextFindMatch"
+        },
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.insertCursorAbove"
+        },
+        "key": "ctrl+alt+up",
+        "mac": "cmd+alt+up",
+        "linux": "shift+alt+up",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.insertCursorBelow"
+        },
+        "key": "ctrl+alt+down",
+        "mac": "cmd+alt+down",
+        "linux": "shift+alt+down",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.moveLinesUpAction"
+        },
+        "key": "alt+up",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.moveLinesDownAction"
+        },
+        "key": "alt+down",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.copyLinesUpAction"
+        },
+        "key": "shift+alt+up",
+        "mac": "shift+alt+up",
+        "linux": "ctrl+shift+alt+up",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.copyLinesDownAction"
+        },
+        "key": "shift+alt+down",
+        "mac": "shift+alt+down",
+        "linux": "ctrl+shift+alt+down",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.deleteLines"
+        },
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.commentLine"
+        },
+        "key": "ctrl+/",
+        "mac": "cmd+/",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.indentLines"
+        },
+        "key": "ctrl+]",
+        "mac": "cmd+]",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.outdentLines"
+        },
+        "key": "ctrl+[",
+        "mac": "cmd+[",
+        "when": "nighthawk.macro.recording && editorTextFocus && !editorReadonly"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "expandLineSelection"
+        },
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.clipboardCopyAction"
+        },
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.clipboardCutAction"
+        },
+        "key": "ctrl+x",
+        "mac": "cmd+x",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.clipboardPasteAction"
+        },
+        "key": "ctrl+v",
+        "mac": "cmd+v",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "editor.action.selectAll"
+        },
+        "key": "ctrl+a",
+        "mac": "cmd+a",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "undo"
+        },
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "redo"
+        },
+        "key": "ctrl+y",
+        "mac": "cmd+shift+z",
+        "when": "nighthawk.macro.recording && editorTextFocus"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "redo"
+        },
+        "key": "ctrl+shift+z",
+        "when": "nighthawk.macro.recording && editorTextFocus && !isMac"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "removeSecondaryCursors"
+        },
+        "key": "escape",
+        "when": "nighthawk.macro.recording && editorTextFocus && editorHasMultipleSelections && !suggestWidgetVisible && !parameterHintsVisible && !inlineSuggestionVisible && !inlineEditIsVisible && !findWidgetVisible && !inSnippetMode && !nighthawk.inlineEdit.generating && !nighthawk.inlineEdit.reviewing"
+      },
+      {
+        "command": "nighthawk.macro.wrap",
+        "args": {
+          "command": "cancelSelection"
+        },
+        "key": "escape",
+        "when": "nighthawk.macro.recording && editorTextFocus && editorHasSelection && !editorHasMultipleSelections && !suggestWidgetVisible && !parameterHintsVisible && !inlineSuggestionVisible && !inlineEditIsVisible && !findWidgetVisible && !inSnippetMode && !nighthawk.inlineEdit.generating && !nighthawk.inlineEdit.reviewing"
       }
     ],
     "terminalQuickFixes": [
