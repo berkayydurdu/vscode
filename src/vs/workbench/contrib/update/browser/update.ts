@@ -12,7 +12,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IUpdateService, State as UpdateState, StateType } from '../../../../platform/update/common/update.js';
+import { AvailableForDownload, Downloaded, IUpdateService, Ready, State as UpdateState, StateType } from '../../../../platform/update/common/update.js';
 import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../../services/environment/browser/environmentService.js';
@@ -21,7 +21,7 @@ import { isWeb } from '../../../../base/common/platform.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { RawContextKey, IContextKey, IContextKeyService, ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { MenuRegistry, MenuId, registerAction2, Action2 } from '../../../../platform/actions/common/actions.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { IUserDataSyncEnablementService, IUserDataSyncService, IUserDataSyncStoreManagementService, SyncStatus, UserDataSyncStoreType } from '../../../../platform/userDataSync/common/userDataSync.js';
@@ -157,6 +157,11 @@ export function appendUpdateMenuItems(menuId: MenuId, group: string): void {
 	});
 }
 
+/** The version with its CI build number, for builds from GitHub Releases that share a version. */
+function formatVersion(version: string, buildNumber: number | undefined): string {
+	return buildNumber ? nls.localize('versionWithBuild', "{0} build {1}", version, buildNumber) : version;
+}
+
 function isMajorMinorUpdate(before: IVersion, after: IVersion): boolean {
 	return before.major < after.major || before.minor < after.minor;
 }
@@ -220,16 +225,19 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 	private readonly badgeDisposable = this._register(new MutableDisposable());
 	private updateStateContextKey: IContextKey<string>;
 	private majorMinorUpdateAvailableContextKey: IContextKey<boolean>;
+	private readonly notifiedUpdates = new Set<string>();
 
 	constructor(
 		@IStorageService storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IDialogService private readonly dialogService: IDialogService,
+		@INotificationService private readonly notificationService: INotificationService,
 		@IUpdateService private readonly updateService: IUpdateService,
 		@IActivityService private readonly activityService: IActivityService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IProductService private readonly productService: IProductService,
 		@IHostService private readonly hostService: IHostService,
+		@ICommandService private readonly commandService: ICommandService,
 	) {
 		super();
 		this.state = updateService.state;
@@ -274,8 +282,16 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 			case StateType.Idle:
 				// Themed dialog shown from the last focused window; the windowless macOS case is handled by the main process.
 				if (state.notAvailable && !state.error && await this.hostService.hadLastFocus()) {
-					this.dialogService.info(nls.localize('noUpdatesAvailable', "There are currently no updates available."));
+					this.dialogService.info(
+						nls.localize('upToDate', "{0} is up to date.", this.productService.nameLong),
+						nls.localize('currentVersion', "You have the latest version: {0}.", formatVersion(this.productService.version, this.productService.buildNumber))
+					);
 				}
+				break;
+
+			case StateType.AvailableForDownload:
+			case StateType.Downloaded:
+				this.notifyUpdate(state);
 				break;
 
 			case StateType.Ready: {
@@ -285,6 +301,7 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 					const nextVersion = tryParseVersion(productVersion);
 					this.majorMinorUpdateAvailableContextKey.set(Boolean(currentVersion && nextVersion && isMajorMinorUpdate(currentVersion, nextVersion)));
 				}
+				this.notifyUpdate(state);
 				break;
 			}
 		}
@@ -292,6 +309,52 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 		this.updateBadge(state);
 
 		this.state = state;
+	}
+
+	/**
+	 * Shows a notification when an update is available, downloaded or ready to install. Each update
+	 * is announced once per state, in the last focused window only.
+	 */
+	private async notifyUpdate(state: AvailableForDownload | Downloaded | Ready): Promise<void> {
+		const key = `${state.type}:${state.update.version}`;
+		if (this.notifiedUpdates.has(key) || !await this.hostService.hadLastFocus()) {
+			return;
+		}
+		this.notifiedUpdates.add(key);
+
+		const name = this.productService.nameLong;
+		const version = state.update.productVersion ? formatVersion(state.update.productVersion, state.update.buildNumber) : undefined;
+		let message: string;
+		let label: string;
+		let commandId: string;
+		switch (state.type) {
+			case StateType.AvailableForDownload:
+				message = version
+					? nls.localize('updateAvailableVersion', "A new version of {0} is available: {1}.", name, version)
+					: nls.localize('updateAvailableNoVersion', "A new version of {0} is available.", name);
+				label = nls.localize('downloadUpdateNotification', "Download");
+				commandId = 'update.downloadNow';
+				break;
+			case StateType.Downloaded:
+				message = version
+					? nls.localize('updateDownloadedVersion', "{0} {1} has been downloaded and is ready to install.", name, version)
+					: nls.localize('updateDownloadedNoVersion', "A new version of {0} has been downloaded and is ready to install.", name);
+				label = nls.localize('installUpdateNotification', "Install Update");
+				commandId = 'update.install';
+				break;
+			case StateType.Ready:
+				message = version
+					? nls.localize('updateReadyVersion', "{0} {1} is ready. Restart to finish updating.", name, version)
+					: nls.localize('updateReadyNoVersion', "A new version of {0} is ready. Restart to finish updating.", name);
+				label = nls.localize('restartToUpdateNotification', "Restart to Update");
+				commandId = 'update.restart';
+				break;
+		}
+
+		this.notificationService.prompt(Severity.Info, message, [
+			{ label, run: () => this.commandService.executeCommand(commandId) },
+			{ label: nls.localize('later', "Later"), run: () => { } }
+		]);
 	}
 
 	private updateBadge(state: UpdateState): void {

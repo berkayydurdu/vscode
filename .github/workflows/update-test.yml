@@ -11,6 +11,7 @@ on:
       - main
     paths:
       - src/vs/platform/update/**
+      - src/vs/workbench/contrib/update/**
       - build/win32/code.iss
       - build/update/**
       - .github/workflows/update-test.yml
