@@ -260,7 +260,12 @@ class App {
 	}
 
 	private renderEmpty(): HTMLElement {
-		const suggestions: { label: string; text: string }[] = [
+		const chat = !!this.state.chat;
+		const suggestions: { label: string; text: string }[] = chat ? [
+			{ label: t('Explain how this project is put together'), text: t('Give me a tour of this codebase: what it does, how it is structured and where to start.') },
+			{ label: t('Explain a file'), text: t('Explain what this file does: @') },
+			{ label: t('Ask a programming question'), text: t('How do I ') },
+		] : [
 			{ label: t('Explain how this project is put together'), text: t('Give me a tour of this codebase: what it does, how it is structured and where to start.') },
 			{ label: t('Find and fix a bug'), text: t('There is a bug: ') },
 			{ label: t('/init: write project instructions'), text: '/init' },
@@ -269,11 +274,13 @@ class App {
 		const recent = this.sessions.slice(0, 5);
 		return h('div', { class: 'empty' },
 			h('div', { class: 'empty-logo' }, icon('sparkle', 28)),
-			h('h1', null, t('What should we build?')),
-			h('p', { class: 'muted' }, t('Describe a change, a bug or a question. The agent reads your code, edits files and runs commands, and asks before anything risky.')),
+			h('h1', null, chat ? t('Ask anything') : t('What should we build?')),
+			h('p', { class: 'muted' }, chat
+				? t('Ask about your code or anything else. Chat reads your code to answer but never changes files or runs commands; use the Agent for that.')
+				: t('Describe a change, a bug or a question. The agent reads your code, edits files and runs commands, and asks before anything risky.')),
 			!this.state.configured && h('div', { class: 'connect' },
 				h('div', { class: 'connect-title' }, icon('chip', 16), t('Connect a model to get started')),
-				h('p', { class: 'muted' }, t('Use Anthropic, OpenAI, OpenRouter, Gemini, DeepSeek, Groq, a local Ollama or LM Studio, or any OpenAI-compatible API. Keys stay in your OS keychain.')),
+				h('p', { class: 'muted' }, t('Use GitHub Copilot, Anthropic, OpenAI, OpenRouter, Gemini, DeepSeek, Groq, a local Ollama or LM Studio, or any OpenAI-compatible API. Keys stay in your OS keychain.')),
 				h('button', { class: 'button primary', onclick: () => post({ type: 'action', action: 'addEndpoint' }) }, t('Add Model Endpoint'))),
 			this.state.configured && h('div', { class: 'suggestions' }, suggestions.map(s => h('button', {
 				class: 'suggestion',
@@ -289,14 +296,14 @@ class App {
 				},
 			}, s.label))),
 			recent.length > 0 && h('div', { class: 'recent' },
-				h('div', { class: 'section-label' }, icon('history', 14), t('Recent conversations')),
+				h('div', { class: 'section-label' }, icon('history', 14), chat ? t('Recent chats') : t('Recent conversations')),
 				recent.map(s => h('div', { class: 'recent-row' },
 					h('button', { class: 'recent-item', title: s.title, onclick: () => post({ type: 'openSession', id: s.id }) },
 						h('span', { class: 'recent-title' }, s.title),
 						h('span', { class: 'recent-time' }, timeAgo(s.updated))),
 					h('button', { class: 'icon-button recent-delete', title: t('Delete'), 'aria-label': t('Delete'), onclick: () => post({ type: 'deleteSession', id: s.id }) }, icon('trash', 13))))),
 			h('div', { class: 'tips muted' },
-				h('span', null, h('kbd', null, 'Shift+Tab'), ' ', t('modes')),
+				!chat && h('span', null, h('kbd', null, 'Shift+Tab'), ' ', t('modes')),
 				h('span', null, h('kbd', null, '@'), ' ', t('files')),
 				h('span', null, h('kbd', null, '/'), ' ', t('commands')),
 				h('span', null, h('kbd', null, 'Esc'), ' ', t('stop'))));
@@ -679,9 +686,10 @@ class App {
 		const hasText = !!this.input.value.trim();
 		this.input.placeholder = this.state.running
 			? t('Add to the conversation; it is sent at the next step')
-			: this.state.mode === 'plan' ? t('Describe what you want planned...') : t('Ask the agent to build, fix or explain... (@ files, / commands)');
+			: this.state.chat ? t('Ask a question... (@ files)')
+				: this.state.mode === 'plan' ? t('Describe what you want planned...') : t('Ask the agent to build, fix or explain... (@ files, / commands)');
 		fill(this.toolbar,
-			h('button', {
+			!this.state.chat && h('button', {
 				class: `chip mode mode-${mode.id}`, title: `${mode.hint()} (${t('Shift+Tab to switch')})`,
 				onclick: () => this.cycleMode(),
 			}, icon(mode.icon, 13), h('span', { class: 'chip-label' }, mode.label())),
@@ -699,6 +707,9 @@ class App {
 	}
 
 	private cycleMode(): void {
+		if (this.state.chat) {
+			return;
+		}
 		const index = MODES.findIndex(m => m.id === this.state.mode);
 		const next = MODES[(index + 1) % MODES.length];
 		this.state.mode = next.id;
