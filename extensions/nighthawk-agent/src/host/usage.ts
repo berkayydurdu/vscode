@@ -102,7 +102,12 @@ export class UsageMeter implements vscode.Disposable {
 	}
 
 	priceOf(endpoint: Endpoint, model: string): Price | undefined {
-		return findPrice(model, endpoint.baseUrl, this.prices());
+		const prices = this.prices();
+		// Copilot requests are part of the user's Copilot plan, which GitHub meters itself.
+		if (endpoint.provider === 'copilot' && !prices[model]) {
+			return { input: 0, output: 0 };
+		}
+		return findPrice(model, endpoint.baseUrl, prices);
 	}
 
 	/** This month's spending so far. */

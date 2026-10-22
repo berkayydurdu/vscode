@@ -4,8 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { listAnthropicModels, streamAnthropic } from './anthropic';
+import { GITHUB_API_URL, listCopilotModels, streamCopilot } from './copilot';
 import { listOpenAIModels, streamOpenAI } from './openai';
-import { ProviderError, type ChatRequest, type Endpoint, type ModelStream, type StreamEvent } from './types';
+import { ProviderError, type ChatRequest, type Endpoint, type ModelStream, type ProviderKind, type StreamEvent } from './types';
 
 export interface ModelOptions {
 	thinking: boolean;
@@ -39,7 +40,9 @@ export function modelStream(endpoint: Endpoint, model: string, apiKey: string | 
 			try {
 				const stream = endpoint.provider === 'anthropic'
 					? streamAnthropic(endpoint, model, apiKey, withEffort, { thinking: options.thinking }, signal)
-					: streamOpenAI(endpoint, model, apiKey, withEffort, signal);
+					: endpoint.provider === 'copilot'
+						? streamCopilot(endpoint, model, apiKey, withEffort, signal)
+						: streamOpenAI(endpoint, model, apiKey, withEffort, signal);
 				for await (const event of stream) {
 					started = true;
 					yield event;
@@ -56,6 +59,9 @@ export function modelStream(endpoint: Endpoint, model: string, apiKey: string | 
 }
 
 export function listModels(endpoint: Endpoint, apiKey: string | undefined, signal?: AbortSignal): Promise<string[]> {
+	if (endpoint.provider === 'copilot') {
+		return listCopilotModels(endpoint, apiKey, signal);
+	}
 	return endpoint.provider === 'anthropic' ? listAnthropicModels(endpoint, apiKey, signal) : listOpenAIModels(endpoint, apiKey, signal);
 }
 
@@ -63,6 +69,10 @@ export function listModels(endpoint: Endpoint, apiKey: string | undefined, signa
 export function guessContextWindow(endpoint: Endpoint, model: string): number {
 	if (endpoint.contextWindow) {
 		return endpoint.contextWindow;
+	}
+	if (endpoint.provider === 'copilot') {
+		// Copilot caps prompts below the models' own windows.
+		return 128_000;
 	}
 	const id = model.toLowerCase();
 	if (/claude-(opus|sonnet|fable|mythos)-(4-[6-9]|[5-9])|claude-haiku-[5-9]|gemini-(1\.5|2|3)/.test(id)) {
@@ -83,7 +93,7 @@ export function guessContextWindow(endpoint: Endpoint, model: string): number {
 export interface Preset {
 	id: string;
 	label: string;
-	provider: 'anthropic' | 'openai';
+	provider: ProviderKind;
 	baseUrl: string;
 	models: string[];
 	needsKey: boolean;
@@ -94,6 +104,7 @@ export interface Preset {
 export const PRESETS: Preset[] = [
 	{ id: 'anthropic', label: 'Anthropic (Claude)', provider: 'anthropic', baseUrl: 'https://api.anthropic.com', models: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], needsKey: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
 	{ id: 'openai', label: 'OpenAI', provider: 'openai', baseUrl: 'https://api.openai.com/v1', models: [], needsKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
+	{ id: 'copilot', label: 'GitHub Copilot', provider: 'copilot', baseUrl: GITHUB_API_URL, models: [], needsKey: false },
 	{ id: 'openrouter', label: 'OpenRouter', provider: 'openai', baseUrl: 'https://openrouter.ai/api/v1', models: [], needsKey: true, keyUrl: 'https://openrouter.ai/keys' },
 	{ id: 'gemini', label: 'Google Gemini', provider: 'openai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', models: [], needsKey: true, keyUrl: 'https://aistudio.google.com/apikey' },
 	{ id: 'deepseek', label: 'DeepSeek', provider: 'openai', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },

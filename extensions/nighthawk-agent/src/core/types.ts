@@ -6,7 +6,7 @@
 // Shared types for the agent core. Files in src/core must not import 'vscode'
 // so they can be tested with plain Node.
 
-export type ProviderKind = 'anthropic' | 'openai';
+export type ProviderKind = 'anthropic' | 'openai' | 'copilot';
 
 /** A model endpoint the user configured under `nighthawk.ai.endpoints`. */
 export interface Endpoint {

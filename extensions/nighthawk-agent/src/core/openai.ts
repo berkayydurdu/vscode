@@ -128,42 +128,41 @@ export async function* streamOpenAI(endpoint: Endpoint, model: string, apiKey: s
 				usage.cost = data.usage.cost;
 			}
 		}
-		const choice = data.choices?.[0];
-		if (!choice) {
-			continue;
-		}
-		const delta = choice.delta ?? choice.message ?? {};
-		const thought = delta.reasoning_content ?? delta.reasoning;
-		if (typeof thought === 'string' && thought) {
-			reasoning += thought;
-			yield { type: 'thinking', text: thought };
-		}
-		if (typeof delta.content === 'string' && delta.content) {
-			text += delta.content;
-			yield { type: 'text', text: delta.content };
-		}
-		for (const call of delta.tool_calls ?? []) {
-			const index = typeof call.index === 'number' ? call.index : calls.length;
-			if (!calls[index]) {
-				calls[index] = { id: call.id ?? `call_${index}_${Date.now()}`, name: '', args: '' };
+		// GitHub Copilot sends Claude's text and tool calls as separate choices.
+		for (const choice of data.choices ?? []) {
+			const delta = choice.delta ?? choice.message ?? {};
+			const thought = delta.reasoning_content ?? delta.reasoning ?? delta.reasoning_text;
+			if (typeof thought === 'string' && thought) {
+				reasoning += thought;
+				yield { type: 'thinking', text: thought };
 			}
-			const entry = calls[index];
-			if (call.id) {
-				entry.id = call.id;
+			if (typeof delta.content === 'string' && delta.content) {
+				text += delta.content;
+				yield { type: 'text', text: delta.content };
 			}
-			if (call.function?.name) {
-				const first = !entry.name;
-				entry.name += call.function.name;
-				if (first) {
-					yield { type: 'tool_start', id: entry.id, name: entry.name };
+			for (const call of delta.tool_calls ?? []) {
+				const index = typeof call.index === 'number' ? call.index : calls.length;
+				if (!calls[index]) {
+					calls[index] = { id: call.id ?? `call_${index}_${Date.now()}`, name: '', args: '' };
+				}
+				const entry = calls[index];
+				if (call.id) {
+					entry.id = call.id;
+				}
+				if (call.function?.name) {
+					const first = !entry.name;
+					entry.name += call.function.name;
+					if (first) {
+						yield { type: 'tool_start', id: entry.id, name: entry.name };
+					}
+				}
+				if (call.function?.arguments) {
+					entry.args += typeof call.function.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function.arguments);
 				}
 			}
-			if (call.function?.arguments) {
-				entry.args += typeof call.function.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function.arguments);
+			if (choice.finish_reason) {
+				finish = choice.finish_reason;
 			}
-		}
-		if (choice.finish_reason) {
-			finish = choice.finish_reason;
 		}
 	}
 	const content: Part[] = [];

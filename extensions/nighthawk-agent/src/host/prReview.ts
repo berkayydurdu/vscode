@@ -193,10 +193,11 @@ export class PullRequestReviews {
 		if (!target) {
 			return;
 		}
-		// GitHub's runners cannot reach a model on this computer, so a local one falls back to Claude.
+		// GitHub's runners cannot reach a model on this computer, and Copilot needs an editor
+		// sign-in, so those fall back to Claude.
 		const choice = this.endpoints.current();
 		const local = !!choice && /\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(choice.endpoint.baseUrl);
-		const cloud = local ? undefined : choice;
+		const cloud = local || choice?.endpoint.provider === 'copilot' ? undefined : choice;
 		const provider = cloud?.endpoint.provider ?? 'anthropic';
 		const model = cloud?.model ?? PRESETS[0].models[1];
 		const baseUrl = cloud?.endpoint.baseUrl ?? '';

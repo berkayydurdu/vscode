@@ -1,12 +1,14 @@
 # Nighthawk Agent
 
-A coding agent built into Nighthawk, in the spirit of Claude Code. It reads your code, edits files, runs commands and asks before anything risky. It works with any model you connect: Anthropic, OpenAI, OpenRouter, Gemini, DeepSeek, Mistral, Groq, xAI, a local Ollama or LM Studio, or any OpenAI-compatible or Anthropic-compatible API.
+A coding agent built into Nighthawk, in the spirit of Claude Code. It reads your code, edits files, runs commands and asks before anything risky. It works with any model you connect: Anthropic, OpenAI, GitHub Copilot, OpenRouter, Gemini, DeepSeek, Mistral, Groq, xAI, a local Ollama or LM Studio, or any OpenAI-compatible or Anthropic-compatible API.
 
 Open it with **Ctrl+Escape** or the sparkle icon in the secondary side bar.
 
 ## Connecting a model
 
 Run **AI: Add Model Endpoint**, pick a provider, paste a key and choose models. Keys are stored in the OS keychain (Windows Credential Manager, macOS Keychain, libsecret on Linux), never in settings. If no key is stored, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `OPENROUTER_API_KEY` from the environment is used.
+
+**GitHub Copilot.** Pick GitHub Copilot in **AI: Add Model Endpoint** (or run **AI: Sign In to GitHub Copilot**), enter the code Nighthawk shows on GitHub, and choose models from your Copilot plan (Copilot Free works). The GitHub sign-in is kept in the OS keychain; Nighthawk swaps it for a short-lived Copilot token as needed. Copilot requests show as free on the usage page because your plan covers them; premium models still count against Copilot's own monthly premium request allowance, while the agent's tool follow-ups are marked as agent requests the way Copilot's own editors do. Models that only work through the Responses API (the Codex ones) are not listed yet. This uses the same sign-in and chat API as other editors that support Copilot, such as Zed; GitHub does not document it for third-party editors and could change it.
 
 Endpoints live in the `nighthawk.ai.endpoints` setting and can be edited by hand:
 

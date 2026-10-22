@@ -18,7 +18,7 @@ import { postReview, reviewPullRequest, GitHub } from '../core/prReview';
 import { modelStream } from '../core/providers';
 import type { ProviderKind } from '../core/types';
 
-const DEFAULT_BASE_URLS: Record<ProviderKind, string> = {
+const DEFAULT_BASE_URLS: Record<Exclude<ProviderKind, 'copilot'>, string> = {
 	anthropic: 'https://api.anthropic.com',
 	openai: 'https://api.openai.com/v1',
 };
