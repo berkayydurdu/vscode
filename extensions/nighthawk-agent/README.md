@@ -22,6 +22,10 @@ Endpoints live in the `nighthawk.ai.endpoints` setting and can be edited by hand
 
 Switch models from the status bar, the model chip in the panel, or `/model`.
 
+## Chat
+
+The **Chat** view, next to Agent in the secondary side bar (**Chat: Open Chat**, `Ctrl+Alt+I`), is for questions: about your code, or anything else. It uses the same models as the agent, GitHub Copilot included, and can read your code (Read, Grep, Glob, CodebaseSearch and the other read-only tools) to answer, but it never edits files, runs commands or calls MCP tools. When you want the change made, ask the Agent. Chats keep their own history (**Chat: Resume Chat**) and show as Chat on the usage page.
+
 ## Tools
 
 The agent has the same tool set as Claude Code, so models trained on it feel at home:

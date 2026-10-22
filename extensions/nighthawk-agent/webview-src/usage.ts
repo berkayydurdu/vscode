@@ -41,6 +41,7 @@ function monthName(month: string, style: 'long' | 'short' = 'long'): string {
 function featureName(key: string): string {
 	switch (key) {
 		case 'agent': return t('Agent');
+		case 'chat': return t('Chat');
 		case 'commit': return t('Commit messages');
 		case 'terminal': return t('Terminal assistant');
 		case 'inline': return t('Inline edits');

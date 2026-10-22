@@ -77,6 +77,8 @@ export interface SessionData {
 	specFolder?: string;
 	/** Set when an external agent, such as Claude Code, runs this conversation. */
 	external?: ExternalLink;
+	/** A Chat view conversation: questions answered with read-only tools. */
+	chat?: boolean;
 }
 
 export interface ExternalLink {
@@ -96,6 +98,8 @@ export interface SessionOptions {
 	mode?: PermissionMode;
 	/** The external agent that runs the conversation. */
 	external?: string;
+	/** Starts a Chat view conversation. */
+	chat?: boolean;
 }
 
 /** What a user message changed, so it can be rewound. */
@@ -125,6 +129,12 @@ const BUILTIN_COMMANDS: SlashCommandInfo[] = [
 	{ name: 'context', description: 'Show how much of the context window is used' },
 	{ name: 'help', description: 'Show what the agent can do' },
 ];
+
+/** The commands that make sense in the Chat view, which cannot change the workspace. */
+const CHAT_COMMANDS = new Set(['clear', 'compact', 'model', 'context']);
+
+/** The tools the Chat view may use: they read the workspace and the web, and change nothing. */
+const CHAT_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'StructuralSearch', 'CodebaseSearch', 'DocsSearch', 'CodeMap', 'WebFetch', 'Diagnostics']);
 
 /** Nighthawk's own commands that also work with an external agent; the agent adds its own. */
 const EXTERNAL_COMMANDS = new Set(['clear', 'model', 'plan', 'spec', 'memories', 'help']);
@@ -216,6 +226,8 @@ export class Session implements vscode.Disposable {
 	private specFolder: string | undefined;
 	/** The external agent running this conversation, if any, and its process once started. */
 	readonly external: ExternalLink | undefined;
+	/** True for a Chat view conversation, which answers questions and changes nothing. */
+	readonly chat: boolean;
 	private acp: AcpClient | undefined;
 	/** True while the external agent replays a reopened conversation, which the transcript already shows. */
 	private replaying = false;
@@ -253,6 +265,7 @@ export class Session implements vscode.Disposable {
 		this.started = !!data?.messages.length;
 		this.specFolder = data?.specFolder;
 		this.external = data?.external ?? (options?.external ? { agent: options.external } : undefined);
+		this.chat = data?.chat ?? options?.chat ?? false;
 		this.turns = (data?.turns ?? []).map(turn => ({ ...turn, files: new Map() }));
 		const rewindable = new Set(this.turns.map(t => t.itemId));
 		// A restored conversation cannot resume calls that were waiting.
@@ -269,7 +282,9 @@ export class Session implements vscode.Disposable {
 			return item;
 		});
 		this.workspace = new EditorWorkspace(locations(this.roots).roots);
-		this.services.checkpoints.warm(this.workspace.roots);
+		if (!this.chat) {
+			this.services.checkpoints.warm(this.workspace.roots);
+		}
 		// Replaced by the detected shell before the first turn runs.
 		this.shell = shellFromPath(process.platform === 'win32' ? 'powershell.exe' : '/bin/sh');
 		this.refreshCommands();
@@ -308,6 +323,7 @@ export class Session implements vscode.Disposable {
 			configured: !!choice || !!this.external,
 			model: this.external?.agent ?? choice?.model,
 			mode: this.mode,
+			chat: this.chat || undefined,
 			running: this.running,
 			context: tokens !== undefined ? Math.min(1, tokens / this.contextWindow) : undefined,
 			tokens,
@@ -366,6 +382,11 @@ export class Session implements vscode.Disposable {
 			return;
 		}
 		const builtin = new Set(BUILTIN_COMMANDS.map(c => c.name));
+		if (this.chat) {
+			this.commandList = BUILTIN_COMMANDS.filter(c => CHAT_COMMANDS.has(c.name));
+			this.postState();
+			return;
+		}
 		this.commandList = [
 			...BUILTIN_COMMANDS,
 			...this.project.commands.filter(c => !builtin.has(c.name)).map(c => ({ name: c.name, description: c.description || vscode.l10n.t('Custom command ({0})', c.scope), hint: c.argumentHint })),
@@ -413,8 +434,8 @@ export class Session implements vscode.Disposable {
 		const item: Extract<TranscriptItem, { kind: 'user' }> = { kind: 'user', id: newId('u'), text: shown, canRewind: true };
 		this.turns.push({ itemId: item.id, messageIndex: this.messages.length, itemIndex: this.items.length, text: shown, files: new Map() });
 		this.upsert(item);
-		// Saved before anything runs, hand edits since the last message included.
-		const checkpoint = await this.services.checkpoints.create(this.workspace.roots, shown);
+		// Saved before anything runs, hand edits since the last message included. Chat changes nothing.
+		const checkpoint = this.chat ? undefined : await this.services.checkpoints.create(this.workspace.roots, shown);
 		if (checkpoint) {
 			this.update<'user'>(item.id, { checkpoint });
 		}
@@ -536,10 +557,13 @@ export class Session implements vscode.Disposable {
 			return false;
 		}
 		const [, name, args] = match;
+		if (this.chat && !CHAT_COMMANDS.has(name) && name !== 'new') {
+			return false;
+		}
 		switch (name) {
 			case 'clear':
 			case 'new':
-				return void vscode.commands.executeCommand('nighthawk.agent.newSession');
+				return void vscode.commands.executeCommand(this.chat ? 'nighthawk.chat.newSession' : 'nighthawk.agent.newSession');
 			case 'compact':
 				return void this.compact(args);
 			case 'init':
@@ -704,7 +728,7 @@ export class Session implements vscode.Disposable {
 			stream: this.services.usage.track(stream, {
 				endpoint: choice.endpoint,
 				model: choice.model,
-				feature: 'agent',
+				feature: this.chat ? 'chat' : 'agent',
 				session: () => ({ id: this.id, title: this.title }),
 				onCost: cost => {
 					this.cost += cost ?? 0;
@@ -721,6 +745,9 @@ export class Session implements vscode.Disposable {
 		const tools: Tool[] = [];
 		for (const tool of BUILTIN_TOOLS) {
 			const name = tool.spec.name;
+			if (this.chat && !CHAT_TOOLS.has(name)) {
+				continue;
+			}
 			if (name === 'Skill' && !project.skills.length) {
 				continue;
 			}
@@ -746,7 +773,8 @@ export class Session implements vscode.Disposable {
 							: tool.spec.description;
 			tools.push({ ...tool, spec: { ...tool.spec, description } });
 		}
-		tools.push(diagnosticsTool(), ...mcpTools);
+		// MCP tools can change anything, so Chat leaves them out.
+		tools.push(diagnosticsTool(), ...this.chat ? [] : mcpTools);
 		return tools;
 	}
 
@@ -802,6 +830,7 @@ export class Session implements vscode.Disposable {
 				isGitRepo: !!this.workspace.roots[0] && await exists(path.join(this.workspace.roots[0], '.git')),
 				custom: vscode.workspace.getConfiguration('nighthawk.agent').get<string>('systemPrompt'),
 				memories: this.services.memories?.enabled() ? await this.services.memories.list() : undefined,
+				chat: this.chat,
 			};
 			this.contextWindow = model.contextWindow;
 			const config = vscode.workspace.getConfiguration('nighthawk.agent');
@@ -1305,6 +1334,9 @@ export class Session implements vscode.Disposable {
 	}
 
 	private async permission(tool: Tool, input: Record<string, unknown>, callId: string, preview: ToolDisplay | undefined, project: Project): Promise<PermissionAnswer> {
+		if (this.chat && !CHAT_TOOLS.has(tool.spec.name)) {
+			return { allow: false, reason: 'Chat cannot change files or run commands. Show the change in your reply instead.' };
+		}
 		const decision = decide({ tool, input, mode: this.mode, allow: [...project.allow, ...this.allowRules], deny: project.deny, workspace: this.workspace, onlyEditInside: this.specFolder });
 		if (decision.behavior === 'allow') {
 			return { allow: true };
@@ -1564,7 +1596,7 @@ export class Session implements vscode.Disposable {
 
 	toData(): SessionData {
 		const turns = this.turns.map(({ files: _files, ...turn }) => turn);
-		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots, turns, specFolder: this.specFolder, external: this.external };
+		return { id: this.id, title: this.title, created: this.created, updated: this.updated, mode: this.mode, messages: this.messages, items: this.items, todos: this.todos, cost: this.cost, roots: this.roots, turns, specFolder: this.specFolder, external: this.external, chat: this.chat || undefined };
 	}
 
 	private async save(): Promise<void> {
@@ -1578,6 +1610,14 @@ export class Session implements vscode.Disposable {
 			// Saving history must never break the conversation.
 		}
 	}
+}
+
+export interface StoredSession {
+	id: string;
+	title: string;
+	updated: number;
+	/** True for Chat view conversations. */
+	chat: boolean;
 }
 
 /** Conversations, one JSON file each, kept per workspace. */
@@ -1614,7 +1654,7 @@ export class SessionStore {
 		await vscode.workspace.fs.delete(this.file(id)).then(undefined, () => undefined);
 	}
 
-	async list(): Promise<{ id: string; title: string; updated: number }[]> {
+	async list(): Promise<StoredSession[]> {
 		let entries: [string, vscode.FileType][];
 		try {
 			entries = await vscode.workspace.fs.readDirectory(this.dir);
@@ -1623,9 +1663,9 @@ export class SessionStore {
 		}
 		const sessions = await Promise.all(entries.filter(([name]) => name.endsWith('.json')).map(async ([name]) => {
 			const data = await this.load(name.slice(0, -5));
-			return data ? { id: data.id, title: data.title || 'Untitled', updated: data.updated } : undefined;
+			return data ? { id: data.id, title: data.title || 'Untitled', updated: data.updated, chat: !!data.chat } : undefined;
 		}));
-		return sessions.filter((s): s is { id: string; title: string; updated: number } => !!s).sort((a, b) => b.updated - a.updated);
+		return sessions.filter((s): s is StoredSession => !!s).sort((a, b) => b.updated - a.updated);
 	}
 
 	/** Keeps the 100 most recent conversations. */

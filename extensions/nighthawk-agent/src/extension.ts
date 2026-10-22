@@ -71,6 +71,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		diffs: diffs.provider,
 	};
 	const view = new AgentViewProvider(host);
+	const chatView = new AgentViewProvider(host, true);
 	const background = new BackgroundAgents(host);
 	host.liveSession = id => background.live(id);
 	const terminal = new TerminalAssistant(endpoints, usage, async (shown, prompt) => {
@@ -96,7 +97,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, macros, scratches, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
+		endpoints, mcp, view, chatView, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, macros, scratches, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -117,6 +118,15 @@ export function activate(context: vscode.ExtensionContext): void {
 			controller.focusInput();
 		}),
 		vscode.commands.registerCommand('nighthawk.agent.history', async () => (await view.show()).showHistory()),
+		vscode.window.registerWebviewViewProvider(AgentViewProvider.chatViewId, chatView, { webviewOptions: { retainContextWhenHidden: true } }),
+		vscode.commands.registerCommand('nighthawk.chat.open', async () => (await chatView.show()).focusInput()),
+		vscode.commands.registerCommand('nighthawk.chat.openInEditor', () => openAgentPanel(host, true)),
+		vscode.commands.registerCommand('nighthawk.chat.newSession', async () => {
+			const controller = await chatView.show();
+			controller.startNew();
+			controller.focusInput();
+		}),
+		vscode.commands.registerCommand('nighthawk.chat.history', async () => (await chatView.show()).showHistory()),
 		vscode.commands.registerCommand('nighthawk.agent.restoreCheckpoint', () => host.checkpoints.pickAndRestore((vscode.workspace.workspaceFolders ?? []).filter(f => f.uri.scheme === 'file').map(f => f.uri.fsPath))),
 		vscode.commands.registerCommand('nighthawk.agent.undoRestore', async () => {
 			if (!await host.checkpoints.undo()) {
@@ -159,7 +169,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			vscode.window.showInformationMessage(vscode.l10n.t('MCP servers restarted.'));
 		}),
 		vscode.commands.registerCommand('nighthawk.ai.generateCommitMessage', (repository?: unknown) => generateCommitMessage(endpoints, usage, repository)),
-		vscode.commands.registerCommand('nighthawk.ai.showUsage', () => UsagePanel.show(context, usage, async id => (await view.show()).open(id))),
+		vscode.commands.registerCommand('nighthawk.ai.showUsage', () => UsagePanel.show(context, usage, async id => (await ((await host.store.load(id))?.chat ? chatView : view).show()).open(id))),
 		vscode.commands.registerCommand('nighthawk.ai.setMonthlyLimit', () => usage.editLimit()),
 		vscode.commands.registerCommand('nighthawk.agent.reviewBranch', async (repository?: unknown) => {
 			const target = await chooseReviewTarget(repository);

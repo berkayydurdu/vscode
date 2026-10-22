@@ -422,6 +422,11 @@
           "id": "nighthawk-agent",
           "icon": "$(sparkle)",
           "title": "%container.title%"
+        },
+        {
+          "id": "nighthawk-chat",
+          "icon": "$(comment-discussion)",
+          "title": "%container.chat.title%"
         }
       ]
     },
@@ -438,6 +443,14 @@
           "name": "%view.background%",
           "icon": "$(layers)",
           "visibility": "collapsed"
+        }
+      ],
+      "nighthawk-chat": [
+        {
+          "type": "webview",
+          "id": "nighthawk.chat.view",
+          "name": "%view.aiChat%",
+          "icon": "$(comment-discussion)"
         }
       ],
       "explorer": [
@@ -530,6 +543,30 @@
         "command": "nighthawk.agent.history",
         "title": "%command.history%",
         "category": "%category.agent%",
+        "icon": "$(history)"
+      },
+      {
+        "command": "nighthawk.chat.open",
+        "title": "%command.chat.open%",
+        "category": "%category.chat%",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nighthawk.chat.openInEditor",
+        "title": "%command.chat.openInEditor%",
+        "category": "%category.chat%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "nighthawk.chat.newSession",
+        "title": "%command.chat.newSession%",
+        "category": "%category.chat%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "nighthawk.chat.history",
+        "title": "%command.chat.history%",
+        "category": "%category.chat%",
         "icon": "$(history)"
       },
       {
@@ -993,6 +1030,26 @@
       ],
       "view/title": [
         {
+          "command": "nighthawk.chat.newSession",
+          "when": "view == nighthawk.chat.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nighthawk.chat.history",
+          "when": "view == nighthawk.chat.view",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nighthawk.chat.openInEditor",
+          "when": "view == nighthawk.chat.view",
+          "group": "0_open@1"
+        },
+        {
+          "command": "nighthawk.ai.manageEndpoints",
+          "when": "view == nighthawk.chat.view",
+          "group": "1_settings@1"
+        },
+        {
           "command": "nighthawk.terminal.askForCommand",
           "when": "view == terminal",
           "group": "navigation@0"
@@ -1192,6 +1249,17 @@
         "command": "nighthawk.agent.open",
         "key": "ctrl+escape",
         "mac": "cmd+escape"
+      },
+      {
+        "command": "nighthawk.chat.open",
+        "key": "ctrl+alt+i",
+        "mac": "ctrl+cmd+i"
+      },
+      {
+        "command": "nighthawk.chat.newSession",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
+        "when": "focusedView == nighthawk.chat.view"
       },
       {
         "command": "nighthawk.agent.addSelection",

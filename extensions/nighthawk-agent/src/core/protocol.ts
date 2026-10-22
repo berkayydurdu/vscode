@@ -93,6 +93,8 @@ export interface ViewState {
 	configured: boolean;
 	model?: string;
 	mode: PermissionModeId;
+	/** Set in the Chat view, which has no permission modes and changes nothing. */
+	chat?: boolean;
 	running: boolean;
 	/** Share of the context window in use, 0 to 1. */
 	context?: number;

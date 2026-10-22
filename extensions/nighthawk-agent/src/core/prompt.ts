@@ -22,6 +22,8 @@ export interface PromptContext {
 	subagentPrompt?: string;
 	/** The saved memories; undefined when memories are off. */
 	memories?: Memory[];
+	/** Set for the Chat view: answers questions with read-only tools instead of changing the workspace. */
+	chat?: boolean;
 }
 
 const GUIDANCE = `You are Nighthawk Agent, a coding agent built into the Nighthawk editor. You help the user with software engineering work in their workspace: fixing bugs, adding features, refactoring, explaining code, running commands and more. Use the tools to act on the workspace; do not just describe what you would do.
@@ -44,6 +46,17 @@ const GUIDANCE = `You are Nighthawk Agent, a coding agent built into the Nightha
 - Before a long series of tool calls, say in a sentence what you are about to do.
 - When you finish, say what changed and anything the user must do or decide. Report failures honestly, with the error.`;
 
+const CHAT_GUIDANCE = `You are Nighthawk Chat, the AI assistant built into the Nighthawk editor. You answer the user's questions: about their code, programming in general, or anything else they ask.
+
+# How to work
+- You can read the workspace with the read-only tools (Read, Grep, Glob, CodebaseSearch and others) to ground answers in the user's actual code. Look things up instead of guessing when the question is about this project.
+- You cannot edit files or run commands in Chat. Show code changes as code blocks in your reply. When the user wants the changes made for them, tell them the Agent view can do it.
+- Never create or repeat secrets.
+
+# Talking to the user
+- Be concise and direct. Lead with the answer.
+- Output is rendered as Markdown. Use fenced code blocks with a language for code, and refer to code as \`path/to/file.ts:42\` so the user can jump to it.`;
+
 const MODE_NOTES: Record<PermissionMode, string> = {
 	default: 'File edits and commands ask the user for approval before they run. If the user declines a call, do not retry it; ask what they want instead.',
 	acceptEdits: 'File edits inside the workspace run without asking; commands still ask for approval. If the user declines a call, do not retry it; ask what they want instead.',
@@ -52,17 +65,17 @@ const MODE_NOTES: Record<PermissionMode, string> = {
 };
 
 export function buildSystemPrompt(ctx: PromptContext): string {
-	const parts: string[] = [ctx.subagentPrompt ?? GUIDANCE];
+	const parts: string[] = [ctx.subagentPrompt ?? (ctx.chat ? CHAT_GUIDANCE : GUIDANCE)];
 	parts.push([
 		'# Environment',
 		`Working directory: ${ctx.roots[0] ?? '(no folder open)'}`,
 		ctx.roots.length > 1 ? `Other workspace folders: ${ctx.roots.slice(1).join(', ')}` : '',
-		`Platform: ${ctx.platform}; shell for Bash: ${ctx.shell}`,
+		ctx.chat ? `Platform: ${ctx.platform}` : `Platform: ${ctx.platform}; shell for Bash: ${ctx.shell}`,
 		`Git repository: ${ctx.isGitRepo ? 'yes' : 'no'}`,
 		`Today's date: ${ctx.date}`,
 		`Model: ${ctx.model}`,
 	].filter(Boolean).join('\n'));
-	if (!ctx.subagentPrompt) {
+	if (!ctx.subagentPrompt && !ctx.chat) {
 		parts.push(`# Permissions\n${MODE_NOTES[ctx.mode]}`);
 	}
 	if (ctx.instructions.length) {

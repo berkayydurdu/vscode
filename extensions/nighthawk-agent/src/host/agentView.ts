@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { HostMessage, PageMessage } from '../core/protocol';
 import { resolvePath } from '../core/workspace';
-import { Session, type Services, type SessionOptions } from './session';
+import { Session, type Services, type SessionOptions, type StoredSession } from './session';
 
 const DIFF_SCHEME = 'nighthawk-agent-diff';
 
@@ -36,7 +36,7 @@ export interface ControllerHost extends Omit<Services, 'reveal' | 'isVisible'> {
 	liveSession?(id: string): Session | undefined;
 }
 
-/** Connects one agent page (the side bar view or an editor tab) to a conversation. */
+/** Connects one agent or chat page (a side bar view or an editor tab) to a conversation. */
 export class AgentController implements vscode.Disposable {
 	session: Session;
 	private listener: vscode.Disposable | undefined;
@@ -55,6 +55,8 @@ export class AgentController implements vscode.Disposable {
 		private readonly reveal: () => void,
 		private readonly isVisible: () => boolean,
 		private readonly onTitle?: (title: string) => void,
+		/** True for the Chat view, whose conversations answer questions and change nothing. */
+		readonly chat = false,
 	) {
 		const media = vscode.Uri.joinPath(host.context.extensionUri, 'media');
 		webview.options = { enableScripts: true, localResourceRoots: [media] };
@@ -112,7 +114,7 @@ export class AgentController implements vscode.Disposable {
 	}
 
 	private newSession(data?: ConstructorParameters<typeof Session>[1], options?: SessionOptions): Session {
-		const session = new Session(this.services(), data, options);
+		const session = new Session(this.services(), data, { ...options, chat: this.chat });
 		this.attach(session);
 		return session;
 	}
@@ -140,7 +142,7 @@ export class AgentController implements vscode.Disposable {
 
 	/** Starts a conversation, with an external agent such as Claude Code when `options.external` names one. */
 	startNew(options?: SessionOptions): void {
-		if (this.session.isEmpty && !this.session.running && this.session.external?.agent === options?.external) {
+		if (this.session.isEmpty && !this.session.running && this.session.chat === this.chat && this.session.external?.agent === options?.external) {
 			this.post({ type: 'focus' });
 			return;
 		}
@@ -189,8 +191,13 @@ export class AgentController implements vscode.Disposable {
 		this.post({ type: 'focus' });
 	}
 
+	/** This page's past conversations: chats in the Chat view, agent conversations elsewhere. */
+	private async sessions(): Promise<StoredSession[]> {
+		return (await this.host.store.list()).filter(s => s.chat === this.chat);
+	}
+
 	async showHistory(): Promise<void> {
-		const sessions = await this.host.store.list();
+		const sessions = await this.sessions();
 		if (!sessions.length) {
 			vscode.window.showInformationMessage(vscode.l10n.t('No past conversations in this workspace yet.'));
 			return;
@@ -246,14 +253,14 @@ export class AgentController implements vscode.Disposable {
 				this.startNew();
 				break;
 			case 'history':
-				this.post({ type: 'sessions', sessions: await this.host.store.list() });
+				this.post({ type: 'sessions', sessions: await this.sessions() });
 				break;
 			case 'openSession':
 				await this.open(message.id);
 				break;
 			case 'deleteSession':
 				await this.host.store.delete(message.id);
-				this.post({ type: 'sessions', sessions: await this.host.store.list() });
+				this.post({ type: 'sessions', sessions: await this.sessions() });
 				break;
 			case 'mention':
 				this.post({ type: 'mentions', requestId: message.requestId, results: await this.mentions(message.query).catch(() => []) });
@@ -386,22 +393,27 @@ export class AgentController implements vscode.Disposable {
 	}
 }
 
-/** The agent in the secondary side bar. */
+/** The agent, or the chat, in the secondary side bar. */
 export class AgentViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
 	static readonly viewId = 'nighthawk.agent.chat';
+	static readonly chatViewId = 'nighthawk.chat.view';
 	controller: AgentController | undefined;
 	private view: vscode.WebviewView | undefined;
 	private readonly resolved = new vscode.EventEmitter<AgentController>();
 	readonly onDidResolve = this.resolved.event;
 
-	constructor(private readonly host: ControllerHost) { }
+	constructor(private readonly host: ControllerHost, private readonly chat = false) { }
+
+	get viewId(): string {
+		return this.chat ? AgentViewProvider.chatViewId : AgentViewProvider.viewId;
+	}
 
 	resolveWebviewView(view: vscode.WebviewView): void {
 		this.view = view;
 		this.controller?.dispose();
 		this.controller = new AgentController(this.host, view.webview, () => view.show(true), () => view.visible, title => {
 			view.description = title || undefined;
-		});
+		}, this.chat);
 		view.onDidDispose(() => {
 			this.controller?.dispose();
 			this.controller = undefined;
@@ -422,7 +434,7 @@ export class AgentViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 				resolve(c);
 			});
 		});
-		await vscode.commands.executeCommand(`${AgentViewProvider.viewId}.focus`);
+		await vscode.commands.executeCommand(`${this.viewId}.focus`);
 		return ready;
 	}
 
@@ -432,13 +444,14 @@ export class AgentViewProvider implements vscode.WebviewViewProvider, vscode.Dis
 	}
 }
 
-/** The agent in an editor tab, like any other editor. */
-export function openAgentPanel(host: ControllerHost): AgentController {
-	const panel = vscode.window.createWebviewPanel('nighthawk.agent.panel', vscode.l10n.t('Agent'), vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
-	panel.iconPath = new vscode.ThemeIcon('sparkle');
+/** The agent, or the chat, in an editor tab, like any other editor. */
+export function openAgentPanel(host: ControllerHost, chat = false): AgentController {
+	const name = chat ? vscode.l10n.t('Chat') : vscode.l10n.t('Agent');
+	const panel = vscode.window.createWebviewPanel(chat ? 'nighthawk.chat.panel' : 'nighthawk.agent.panel', name, vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+	panel.iconPath = new vscode.ThemeIcon(chat ? 'comment-discussion' : 'sparkle');
 	const controller = new AgentController(host, panel.webview, () => panel.reveal(), () => panel.visible, title => {
-		panel.title = title ? (title.length > 30 ? `${title.slice(0, 30)}...` : title) : vscode.l10n.t('Agent');
-	});
+		panel.title = title ? (title.length > 30 ? `${title.slice(0, 30)}...` : title) : name;
+	}, chat);
 	panel.onDidDispose(() => controller.dispose());
 	return controller;
 }
