@@ -22,6 +22,7 @@ import { Preview } from './host/preview';
 import { Multibuffers } from './host/multibuffer';
 import { CodeMaps } from './host/codeMaps';
 import { StructuralSearch } from './host/structural';
+import { Macros } from './host/macros';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -46,6 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const preview = new Preview(context, async text => (await view.show()).prefill(text));
 	const multibuffers = new Multibuffers();
 	const structural = new StructuralSearch(multibuffers);
+	const macros = new Macros(context.globalState);
 	const codeMaps = new CodeMaps(context, workspaceKey(), async (shown, prompt) => {
 		const controller = await view.show();
 		controller.startNew();
@@ -90,7 +92,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	updateStatus();
 
 	context.subscriptions.push(
-		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
+		endpoints, mcp, view, status, usage, codeIndex, memories, docs, preview, multibuffers, codeMaps, macros, background, terminal, inlineEdit, autocomplete, specs, diffs.disposable,
 		vscode.window.registerTreeDataProvider('nighthawk.agent.background', background),
 		vscode.commands.registerCommand('nighthawk.agent.background.start', (prompt?: string) => background.start(typeof prompt === 'string' ? prompt : undefined)),
 		vscode.commands.registerCommand('nighthawk.agent.background.open', task(t => background.open(t))),
@@ -221,6 +223,13 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.codeMap.new', (question?: unknown) => codeMaps.create(typeof question === 'string' ? question : undefined)),
 		vscode.commands.registerCommand('nighthawk.codeMap.open', () => codeMaps.pick()),
 		vscode.commands.registerCommand('nighthawk.structural.run', () => structural.run()),
+		vscode.commands.registerCommand('nighthawk.macro.toggleRecording', () => macros.toggle()),
+		vscode.commands.registerCommand('nighthawk.macro.play', () => macros.play()),
+		vscode.commands.registerCommand('nighthawk.macro.playTimes', () => macros.playTimes()),
+		vscode.commands.registerCommand('nighthawk.macro.playEachLine', () => macros.playEachLine()),
+		vscode.commands.registerCommand('nighthawk.macro.save', () => macros.save()),
+		vscode.commands.registerCommand('nighthawk.macro.run', (args?: { name?: unknown }) => macros.runSaved(args)),
+		vscode.commands.registerCommand('nighthawk.macro.wrap', (args?: { command: string; args?: unknown; edit?: boolean }) => macros.wrap(args)),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

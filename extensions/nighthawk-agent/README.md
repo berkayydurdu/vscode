@@ -192,6 +192,17 @@ A multibuffer shows excerpts from many files in one editable tab, each under a h
 - Comments inside a replaced hole are kept, and arguments on their own lines stay on their own lines.
 - The agent has the same search as its StructuralSearch tool, for questions like "every fetch call that passes options".
 
+## Keyboard macros
+
+Record a sequence of edits once and play it back, as in Emacs and Sublime Text.
+
+- **Ctrl+Alt+R** (Cmd+Alt+R on macOS) starts recording; the status bar shows a red **Recording macro** item with the steps so far. Press it again, or click the item, to stop.
+- **Ctrl+Alt+P** plays the last macro back at the cursor, or at every cursor when there are several.
+- **Macro: Play Back Last Macro Several Times...** repeats it, stopping early if a step fails. **Macro: Play Back Last Macro on Each Selected Line** runs it once at the start of every selected line.
+- A macro records typing, cursor moves and selections (arrows, word jumps, Home/End, Page Up/Down), deletes, Tab, multi-cursor keys (Ctrl+D, add cursor above or below), line commands (move, copy, delete, comment, indent), copy, cut, paste (from the clipboard at play back), undo and redo. Accepting a suggestion records the text it inserted, so playing back does not depend on the suggestion list.
+- **Macro: Save Last Macro...** keeps it under a name. **Macro: Run Saved Macro...** lists saved macros to run or delete; the keyboard button copies a keybinding for `nighthawk.macro.run` with the macro's name to paste into keybindings.json.
+- Macros cannot record while another extension, such as Vim, takes over typing.
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.
