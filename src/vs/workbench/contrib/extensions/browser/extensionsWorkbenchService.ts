@@ -1268,9 +1268,8 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		if (!trustedPublishers?.length) {
 			return false;
 		}
-		const publisher = extension.publisher.toLowerCase();
-		return trustedPublishers.includes(publisher)
-			|| trustedPublishers.includes(extension.publisherDisplayName.toLowerCase());
+		// Nighthawk: match the publisher id only. On Open VSX the display name is set freely by the namespace owner, so it can't be trusted.
+		return trustedPublishers.includes(extension.publisher.toLowerCase());
 	}
 
 	async updateAutoUpdateForAllExtensions(isAutoUpdateEnabled: boolean): Promise<void> {
