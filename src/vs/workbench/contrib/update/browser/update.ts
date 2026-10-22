@@ -12,7 +12,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { AvailableForDownload, Downloaded, IUpdateService, Ready, State as UpdateState, StateType } from '../../../../platform/update/common/update.js';
+import { AvailableForDownload, DisablementReason, Downloaded, IUpdateService, Ready, State as UpdateState, StateType } from '../../../../platform/update/common/update.js';
 import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../../services/environment/browser/environmentService.js';
@@ -157,6 +157,20 @@ export function appendUpdateMenuItems(menuId: MenuId, group: string): void {
 	});
 }
 
+/** The GitHub releases page for a GitHub API releases URL, e.g. `https://github.com/owner/repo/releases`. */
+function getReleasesPageUrl(apiUrl: string | undefined): string | undefined {
+	if (!apiUrl) {
+		return undefined;
+	}
+	try {
+		const url = new URL(apiUrl);
+		const [, repos, owner, repo] = url.pathname.split('/');
+		return url.hostname === 'api.github.com' && repos === 'repos' && owner && repo ? `https://github.com/${owner}/${repo}/releases` : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 /** The version with its CI build number, for builds from GitHub Releases that share a version. */
 function formatVersion(version: string, buildNumber: number | undefined): string {
 	return buildNumber ? nls.localize('versionWithBuild', "{0} build {1}", version, buildNumber) : version;
@@ -238,6 +252,7 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 		@IProductService private readonly productService: IProductService,
 		@IHostService private readonly hostService: IHostService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IOpenerService private readonly openerService: IOpenerService,
 	) {
 		super();
 		this.state = updateService.state;
@@ -309,6 +324,58 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 		this.updateBadge(state);
 
 		this.state = state;
+	}
+
+	/**
+	 * Explains why "Check for Updates..." can't check right now, with a link to the releases page
+	 * so the user can still update by hand.
+	 */
+	private async explainUnavailable(): Promise<void> {
+		const state = this.updateService.state;
+		if (state.type === StateType.Idle) {
+			return this.updateService.checkForUpdates(true);
+		}
+
+		const name = this.productService.nameShort;
+		let detail: string;
+		if (state.type !== StateType.Disabled) {
+			detail = nls.localize('updatesStarting', "{0} is still starting its update service. Try again in a moment.", name);
+		} else {
+			switch (state.reason) {
+				case DisablementReason.ManuallyDisabled:
+					detail = nls.localize('updatesOffBySetting', "Updates are turned off by the \"update.mode\" setting. Set it to \"default\" to check for updates.");
+					break;
+				case DisablementReason.RunningAsAdmin:
+					detail = nls.localize('updatesOffAsAdmin', "{0} is running as administrator, and a per-user install can't update itself that way. Start {0} normally to check for updates.", name);
+					break;
+				case DisablementReason.DisabledByEnvironment:
+					detail = nls.localize('updatesOffByFlag', "Updates are turned off by the --disable-updates command line flag.");
+					break;
+				case DisablementReason.Policy:
+					detail = nls.localize('updatesOffByPolicy', "Updates are turned off by your organization's policy.");
+					break;
+				default:
+					detail = nls.localize('updatesNotAvailable', "This build of {0} can't check for updates.", name);
+					break;
+			}
+		}
+
+		const message = nls.localize('cannotCheckForUpdates', "{0} can't check for updates right now.", name);
+		const releasesUrl = getReleasesPageUrl(this.productService.releaseUpdates?.url);
+		if (!releasesUrl) {
+			await this.dialogService.info(message, detail);
+			return;
+		}
+
+		const { confirmed } = await this.dialogService.confirm({
+			type: Severity.Info,
+			message,
+			detail: `${detail}\n\n${nls.localize('downloadByHand', "You can also download the latest version from the releases page.")}`,
+			primaryButton: nls.localize({ key: 'openReleasesPage', comment: ['&& denotes a mnemonic'] }, "&&Open Releases Page"),
+		});
+		if (confirmed) {
+			await this.openerService.open(URI.parse(releasesUrl));
+		}
 	}
 
 	/**
@@ -388,6 +455,7 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 		CommandsRegistry.registerCommand('update.updating', () => { });
 		CommandsRegistry.registerCommand('update.cancelling', () => { });
 		CommandsRegistry.registerCommand('update.restart', () => this.updateService.quitAndInstall());
+		CommandsRegistry.registerCommand('update.unavailable', () => this.explainUnavailable());
 		CommandsRegistry.registerCommand('_update.state', () => {
 			return this.state;
 		});
