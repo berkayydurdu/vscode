@@ -247,6 +247,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),
 		vscode.commands.registerCommand('nighthawk.ai.selectModel', () => endpoints.pickModel()),
 		vscode.commands.registerCommand('nighthawk.ai.setApiKey', () => endpoints.setKey()),
+		vscode.commands.registerCommand('nighthawk.ai.signInToCopilot', () => endpoints.addCopilot()),
 		vscode.commands.registerCommand('nighthawk.ai.removeEndpoint', () => endpoints.remove()),
 		vscode.commands.registerCommand('nighthawk.ai.manageEndpoints', () => endpoints.manage()),
 	);

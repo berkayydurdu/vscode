@@ -65,11 +65,13 @@
                   "type": "string",
                   "enum": [
                     "anthropic",
-                    "openai"
+                    "openai",
+                    "copilot"
                   ],
                   "enumDescriptions": [
                     "%config.ai.endpoints.provider.anthropic%",
-                    "%config.ai.endpoints.provider.openai%"
+                    "%config.ai.endpoints.provider.openai%",
+                    "%config.ai.endpoints.provider.copilot%"
                   ]
                 },
                 "baseUrl": {
@@ -574,6 +576,11 @@
       {
         "command": "nighthawk.ai.setApiKey",
         "title": "%command.setApiKey%",
+        "category": "%category.ai%"
+      },
+      {
+        "command": "nighthawk.ai.signInToCopilot",
+        "title": "%command.signInToCopilot%",
         "category": "%category.ai%"
       },
       {

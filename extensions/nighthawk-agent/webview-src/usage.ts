@@ -121,7 +121,7 @@ class UsagePage {
 				h('div', { class: 'muted' }, t('Requests from the agent and commit messages are counted here as they finish.')),
 			),
 			h('p', { class: 'footnote' },
-				t('Costs are estimates from list prices, or what the provider reports where it does (OpenRouter). Your provider\'s bill is what counts. Local models such as Ollama and LM Studio are free.'),
+				t('Costs are estimates from list prices, or what the provider reports where it does (OpenRouter). Your provider\'s bill is what counts. Local models such as Ollama and LM Studio are free, and GitHub Copilot requests count against your Copilot plan instead.'),
 				' ',
 				h('button', { class: 'link', onclick: () => post({ type: 'settings' }) }, t('Set your own prices')),
 			),

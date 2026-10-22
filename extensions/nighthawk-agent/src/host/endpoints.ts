@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { pollDeviceToken, requestDeviceCode, type DeviceCode } from '../core/copilot';
 import { listModels, PRESETS, suggestModel, type Preset } from '../core/providers';
 import type { Endpoint, ProviderKind } from '../core/types';
 
@@ -71,7 +72,7 @@ export class Endpoints implements vscode.Disposable {
 			}
 			result.push({
 				name: e.name,
-				provider: e.provider === 'anthropic' ? 'anthropic' : 'openai',
+				provider: e.provider === 'anthropic' || e.provider === 'copilot' ? e.provider : 'openai',
 				baseUrl: e.baseUrl,
 				models: Array.isArray(e.models) ? e.models.map(String) : [],
 				contextWindow: typeof e.contextWindow === 'number' ? e.contextWindow : undefined,
@@ -157,13 +158,18 @@ export class Endpoints implements vscode.Disposable {
 		const pick = await vscode.window.showQuickPick(PRESETS.map(p => ({
 			label: p.label,
 			description: p.baseUrl || undefined,
-			detail: p.provider === 'anthropic' ? vscode.l10n.t('Anthropic Messages API') : vscode.l10n.t('OpenAI-compatible chat completions'),
+			detail: p.provider === 'anthropic' ? vscode.l10n.t('Anthropic Messages API')
+				: p.provider === 'copilot' ? vscode.l10n.t('Sign in with GitHub and use the models in your Copilot plan')
+					: vscode.l10n.t('OpenAI-compatible chat completions'),
 			preset: p,
 		})), { title: vscode.l10n.t('Add a Model Endpoint'), placeHolder: vscode.l10n.t('Where should Nighthawk send requests?'), matchOnDescription: true });
 		if (!pick) {
 			return undefined;
 		}
 		const preset: Preset = pick.preset;
+		if (preset.provider === 'copilot') {
+			return this.addCopilot();
+		}
 		const existing = this.list();
 		const defaultName = preset.id.startsWith('custom') ? '' : preset.label.replace(/\s*\(.*\)$/, '');
 		let name = defaultName;
@@ -232,6 +238,9 @@ export class Endpoints implements vscode.Disposable {
 		if (!preset) {
 			throw new Error(vscode.l10n.t('Unknown provider "{0}".', setup.preset));
 		}
+		if (preset.provider === 'copilot') {
+			return this.quickSetupCopilot(preset, setup.models);
+		}
 		const key = setup.apiKey?.trim() || undefined;
 		if (preset.needsKey && !key) {
 			throw new Error(vscode.l10n.t('Enter your {0} API key.', preset.label));
@@ -264,6 +273,117 @@ export class Endpoints implements vscode.Disposable {
 		await this.save([...this.list().filter(e => e.name !== name), endpoint]);
 		await this.setModel(endpoint, models[0]);
 		return { name, models };
+	}
+
+	/**
+	 * Signs in to GitHub for Copilot and adds the GitHub Copilot endpoint, or
+	 * refreshes the sign-in of the one already set up.
+	 */
+	async addCopilot(): Promise<Endpoint | undefined> {
+		const preset = copilotPreset();
+		const existing = this.list();
+		const current = existing.find(e => e.provider === 'copilot');
+		const endpoint: Endpoint = current ?? { name: preset.label, provider: 'copilot', baseUrl: preset.baseUrl, models: [] };
+		if (!current && existing.some(e => e.name === endpoint.name)) {
+			endpoint.name = `${preset.label} 2`;
+		}
+		const token = await this.signInToCopilot(endpoint);
+		if (!token) {
+			return undefined;
+		}
+		const models = await this.chooseModels(endpoint, token, current?.models ?? []);
+		if (!models.length) {
+			return current;
+		}
+		endpoint.models = models;
+		await this.save([...this.list().filter(e => e.name !== endpoint.name), endpoint]);
+		if (!current && (!this.current() || existing.length === 0)) {
+			await this.setModel(endpoint, endpoint.models[0]);
+		}
+		vscode.window.showInformationMessage(vscode.l10n.t('Signed in to GitHub Copilot with {0} model(s).', models.length));
+		return endpoint;
+	}
+
+	/** The first-run setup's Copilot tile: signs in and lists models, then saves the chosen ones. */
+	private async quickSetupCopilot(preset: Preset, chosen: string[] | undefined): Promise<QuickSetupResult> {
+		const endpoint: Endpoint = this.list().find(e => e.provider === 'copilot') ?? { name: preset.label, provider: 'copilot', baseUrl: preset.baseUrl, models: [] };
+		if (!chosen) {
+			let models: string[] | undefined;
+			const stored = await this.context.secrets.get(KEY_PREFIX + endpoint.name);
+			if (stored) {
+				// An earlier sign-in may have expired; then sign in again.
+				models = await listModels(endpoint, stored, AbortSignal.timeout(15_000)).catch(() => undefined);
+			}
+			if (!models) {
+				const token = await this.signInToCopilot(endpoint);
+				if (!token) {
+					throw new Error(vscode.l10n.t('The GitHub sign-in was cancelled.'));
+				}
+				try {
+					models = await listModels(endpoint, token, AbortSignal.timeout(15_000));
+				} catch (err) {
+					throw new Error(vscode.l10n.t('Could not connect to {0}: {1}', endpoint.name, String(err.message ?? err).slice(0, 300)));
+				}
+			}
+			return { name: endpoint.name, models, suggested: suggestModel(preset, models) };
+		}
+		const models = chosen.map(m => m.trim()).filter(Boolean);
+		if (!models.length) {
+			throw new Error(vscode.l10n.t('Choose a model.'));
+		}
+		endpoint.models = models;
+		await this.save([...this.list().filter(e => e.name !== endpoint.name), endpoint]);
+		await this.setModel(endpoint, models[0]);
+		return { name: endpoint.name, models };
+	}
+
+	/**
+	 * GitHub's device flow: shows a code, opens github.com/login/device and waits
+	 * for the user to approve. Stores and returns the GitHub token.
+	 */
+	private async signInToCopilot(endpoint: Endpoint): Promise<string | undefined> {
+		let code: DeviceCode;
+		try {
+			code = await requestDeviceCode(endpoint.baseUrl, AbortSignal.timeout(15_000));
+		} catch (err) {
+			vscode.window.showErrorMessage(vscode.l10n.t('Could not start the GitHub sign-in: {0}', String(err.message ?? err).slice(0, 300)));
+			return undefined;
+		}
+		const open = vscode.l10n.t('Copy Code and Open GitHub');
+		const answer = await vscode.window.showInformationMessage(
+			vscode.l10n.t('Sign in to GitHub Copilot'),
+			{
+				modal: true,
+				detail: vscode.l10n.t('Enter the code {0} on GitHub to let Nighthawk use your Copilot plan. You need a GitHub account with Copilot (Copilot Free works).', code.userCode),
+			},
+			open,
+		);
+		if (answer !== open) {
+			return undefined;
+		}
+		await vscode.env.clipboard.writeText(code.userCode);
+		// Not awaited: waiting for the approval starts while the browser opens.
+		void vscode.env.openExternal(vscode.Uri.parse(code.verificationUri));
+		let token: string | undefined;
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: vscode.l10n.t('Waiting for you to enter {0} on GitHub (copied to the clipboard)...', code.userCode),
+			cancellable: true,
+		}, async (_progress, cancel) => {
+			const controller = new AbortController();
+			cancel.onCancellationRequested(() => controller.abort());
+			try {
+				token = await pollDeviceToken(endpoint.baseUrl, code, controller.signal);
+			} catch (err) {
+				if (!controller.signal.aborted) {
+					vscode.window.showErrorMessage(String(err.message ?? err).slice(0, 300));
+				}
+			}
+		});
+		if (token) {
+			await this.context.secrets.store(KEY_PREFIX + endpoint.name, token);
+		}
+		return token;
 	}
 
 	/** Returns '' to skip, undefined to cancel. */
@@ -370,7 +490,7 @@ export class Endpoints implements vscode.Disposable {
 		}
 		const endpoint = pick.endpoint;
 		const actions = {
-			key: vscode.l10n.t('Set API Key'),
+			key: endpoint.provider === 'copilot' ? vscode.l10n.t('Sign In to GitHub Again') : vscode.l10n.t('Set API Key'),
 			models: vscode.l10n.t('Choose Models'),
 			settings: vscode.l10n.t('Edit in Settings (JSON)'),
 			remove: vscode.l10n.t('Remove'),
@@ -393,6 +513,10 @@ export class Endpoints implements vscode.Disposable {
 	async setKey(endpoint?: Endpoint): Promise<void> {
 		const target = endpoint ?? (await vscode.window.showQuickPick(this.list().map(e => ({ label: e.name, endpoint: e })), { title: vscode.l10n.t('Set API Key') }))?.endpoint;
 		if (!target) {
+			return;
+		}
+		if (target.provider === 'copilot') {
+			await this.addCopilot();
 			return;
 		}
 		const key = await this.askForKey(target, PRESETS.find(p => p.baseUrl && p.baseUrl === target.baseUrl));
@@ -419,6 +543,14 @@ export class Endpoints implements vscode.Disposable {
 		await this.context.secrets.delete(KEY_PREFIX + target.name);
 		await this.save(this.list().filter(e => e.name !== target.name));
 	}
+}
+
+function copilotPreset(): Preset {
+	const preset = PRESETS.find(p => p.provider === 'copilot');
+	if (!preset) {
+		throw new Error('The GitHub Copilot preset is missing.');
+	}
+	return preset;
 }
 
 function httpsHost(url: string): string | undefined {

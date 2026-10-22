@@ -52,17 +52,19 @@ interface ProviderOption {
 	readonly color: string;
 	readonly needsKey: boolean;
 	readonly keyUrl?: string;
+	/** Connects by signing in in the browser, with the modal hidden meanwhile, instead of with a key. */
+	readonly signIn?: boolean;
 }
 
 const PROVIDERS: readonly ProviderOption[] = [
 	{ preset: 'anthropic', label: 'Anthropic', detail: localize('nh.provider.anthropic', "Claude models"), monogram: 'A', color: '#c96442', needsKey: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
 	{ preset: 'openai', label: 'OpenAI', detail: localize('nh.provider.openai', "GPT models"), monogram: 'O', color: '#10a37f', needsKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
+	{ preset: 'copilot', label: 'GitHub Copilot', detail: localize('nh.provider.copilot', "Your Copilot plan"), monogram: 'GH', color: '#6e40c9', needsKey: false, signIn: true },
 	{ preset: 'openrouter', label: 'OpenRouter', detail: localize('nh.provider.openrouter', "Many models, one key"), monogram: 'R', color: '#6366f1', needsKey: true, keyUrl: 'https://openrouter.ai/keys' },
 	{ preset: 'gemini', label: 'Google Gemini', detail: localize('nh.provider.gemini', "Gemini models"), monogram: 'G', color: '#3b82f6', needsKey: true, keyUrl: 'https://aistudio.google.com/apikey' },
-	{ preset: 'deepseek', label: 'DeepSeek', detail: localize('nh.provider.deepseek', "Chat and reasoner"), monogram: 'D', color: '#4d6bfe', needsKey: true, keyUrl: 'https://platform.deepseek.com/api_keys' },
 	{ preset: 'ollama', label: 'Ollama', detail: localize('nh.provider.ollama', "Runs locally, no key"), monogram: 'Ol', color: '#64748b', needsKey: false },
 	{ preset: 'lmstudio', label: 'LM Studio', detail: localize('nh.provider.lmstudio', "Runs locally, no key"), monogram: 'LM', color: '#8b5cf6', needsKey: false },
-	{ preset: undefined, label: localize('nh.provider.other', "Other"), detail: localize('nh.provider.other.detail', "Groq, Mistral, xAI, more"), monogram: '', color: '', needsKey: false },
+	{ preset: undefined, label: localize('nh.provider.other', "Other"), detail: localize('nh.provider.other.detail', "DeepSeek, Groq, Mistral, more"), monogram: '', color: '', needsKey: false },
 ];
 
 interface QuickSetupResult {
@@ -503,7 +505,9 @@ export class NighthawkOnboarding extends Disposable implements IOnboardingServic
 		} else {
 			const local = append(row, $('.nh-onboarding-local-hint'));
 			local.appendChild(renderIcon(Codicon.info));
-			append(local, $('span')).textContent = localize('nh.model.localHint', "Start {0} on this computer, then connect. Nighthawk lists the models you have downloaded.", provider.label);
+			append(local, $('span')).textContent = provider.signIn
+				? localize('nh.model.signInHint', "Connect, then sign in with your GitHub account in the browser. Nighthawk lists the models in your Copilot plan.")
+				: localize('nh.model.localHint', "Start {0} on this computer, then connect. Nighthawk lists the models you have downloaded.", provider.label);
 		}
 
 		const connect = append(row, $<HTMLButtonElement>('button.onboarding-a-btn.onboarding-a-btn-primary.nh-onboarding-connect'));
@@ -589,6 +593,11 @@ export class NighthawkOnboarding extends Disposable implements IOnboardingServic
 		this.modelState = { kind: 'connecting' };
 		this.renderModelStatus();
 		this.setBusy(true);
+		// The sign-in's code and progress show as dialogs and notifications, which the modal would cover.
+		const hidden = provider.signIn ? this.overlay : undefined;
+		if (hidden) {
+			hidden.style.display = 'none';
+		}
 		try {
 			const result = await this.commandService.executeCommand<QuickSetupResult>(ADD_ENDPOINT_COMMAND, { preset: provider.preset, apiKey: this.apiKey });
 			if (provider !== this.provider) {
@@ -606,6 +615,9 @@ export class NighthawkOnboarding extends Disposable implements IOnboardingServic
 			}
 		} finally {
 			this.setBusy(false);
+			if (hidden) {
+				hidden.style.display = '';
+			}
 		}
 		this.renderModelStatus();
 	}
