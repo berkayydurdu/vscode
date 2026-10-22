@@ -177,6 +177,21 @@ A multibuffer shows excerpts from many files in one editable tab, each under a h
 - **Open File** above a header, or Alt+Enter, opens the file at that line.
 - If a file changed since the multibuffer read it, saving stops and says which; **Multibuffer: Reload Files** reads them again.
 
+## Structural search and replace
+
+**Search: Structural Search and Replace...** finds code by its shape instead of its text, as in JetBrains IDEs: spacing, line breaks and comments do not matter. In the pattern, `$NAME` stands for one expression or argument, `$$$NAME` for any number of them (whole statements too, inside brackets), and `$_` or `$$$` for anything you do not need to name. A name used twice must match the same code both times.
+
+| Find | Replace with |
+| --- | --- |
+| `console.log($$$ARGS)` | `logger.debug($$$ARGS)` |
+| `assertEquals($EXPECTED, $ACTUAL)` | `expect($ACTUAL).toBe($EXPECTED)` |
+| `if ($X) { return $X; }` | `return $X;` |
+
+- Leave the replacement empty to see every match in a multibuffer.
+- With a replacement, **Replace All** changes every file at once (Undo reverts it), and **Review Each** opens the refactor preview to tick the changes you want.
+- Comments inside a replaced hole are kept, and arguments on their own lines stay on their own lines.
+- The agent has the same search as its StructuralSearch tool, for questions like "every fetch call that passes options".
+
 ## Terminal assistant
 
 Press `Ctrl+I` (`Cmd+I` on macOS) in a terminal, or use the sparkle button in the terminal's title bar, and describe what you want to do in plain English. The model suggests one command for your shell and operating system, with what it does; run it, insert it to edit first, or copy it. Commands that delete, overwrite, force-push or run downloaded code are flagged and ask again before they run.

@@ -21,6 +21,7 @@ import { Docs } from './host/docs';
 import { Preview } from './host/preview';
 import { Multibuffers } from './host/multibuffer';
 import { CodeMaps } from './host/codeMaps';
+import { StructuralSearch } from './host/structural';
 import { McpManager } from './host/mcpManager';
 import { Memories } from './host/memories';
 import { SessionStore } from './host/session';
@@ -44,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const docs = new Docs(context.globalStorageUri, () => codeIndex.docsEmbedder());
 	const preview = new Preview(context, async text => (await view.show()).prefill(text));
 	const multibuffers = new Multibuffers();
+	const structural = new StructuralSearch(multibuffers);
 	const codeMaps = new CodeMaps(context, workspaceKey(), async (shown, prompt) => {
 		const controller = await view.show();
 		controller.startNew();
@@ -218,6 +220,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('nighthawk.multibuffer.reload', () => multibuffers.reload()),
 		vscode.commands.registerCommand('nighthawk.codeMap.new', (question?: unknown) => codeMaps.create(typeof question === 'string' ? question : undefined)),
 		vscode.commands.registerCommand('nighthawk.codeMap.open', () => codeMaps.pick()),
+		vscode.commands.registerCommand('nighthawk.structural.run', () => structural.run()),
 		vscode.commands.registerCommand('nighthawk.terminal.askForCommand', (ask?: unknown) => terminal.askForCommand(typeof ask === 'string' ? ask : undefined)),
 		vscode.commands.registerCommand('nighthawk.terminal.explainError', (argument?: { commandLine?: string; output?: string }) => terminal.explainError(argument)),
 		vscode.commands.registerCommand('nighthawk.ai.addEndpoint', (setup?: QuickSetup) => setup?.preset ? endpoints.quickSetup(setup) : endpoints.add()),

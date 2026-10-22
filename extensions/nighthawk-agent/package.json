@@ -756,6 +756,11 @@
         "category": "%category.ai%"
       },
       {
+        "command": "nighthawk.structural.run",
+        "title": "%command.structural.run%",
+        "category": "%category.search%"
+      },
+      {
         "command": "nighthawk.multibuffer.search",
         "title": "%command.multibuffer.search%",
         "category": "%category.multibuffer%"

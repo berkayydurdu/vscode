@@ -14,6 +14,7 @@ import { formatResults, type SearchOptions, type SearchResult } from './indexing
 import { checkCodeMap, CODE_MAP_SCHEMA, type CodeMap } from './codemap';
 import { formatDocResults, type DocResult } from './docs';
 import { looksSecret, type MemoryScope } from './memories';
+import { findMatches, parsePattern } from './structural';
 import { startCommand, truncateOutput, type RunningCommand, type Shell } from './shell';
 import type { Question, Todo, ToolDisplay } from './protocol';
 import type { ToolSpec } from './types';
@@ -632,6 +633,82 @@ const grepTool: Tool = {
 		const more = lines.length > shown.length ? `\n(${lines.length - shown.length} more lines not shown; narrow the search or raise head_limit.)` : '';
 		const noun = mode === 'content' ? 'lines' : 'files';
 		return { content: truncateOutput(shown.join('\n')) + more, summary: `${lines.length} ${noun}` };
+	},
+};
+
+// --- StructuralSearch
+
+const structuralSearchTool: Tool = {
+	kind: 'read',
+	parallel: true,
+	spec: {
+		name: 'StructuralSearch',
+		description: [
+			'Finds code by its structure rather than its text: spacing, line breaks and comments do not matter, and holes stand for code.',
+			'$NAME matches one expression or argument, $$$NAME any number of them (also whole statements inside brackets), $_ and $$$ match without a name; a name used twice must match the same code.',
+			'Examples: "console.log($$$ARGS)", "useEffect($FN, [])", "if ($X) { return $X; }", "fetch($URL, { $$$OPTS })".',
+			'Use it instead of Grep for patterns that span lines or nest, e.g. every call with a given argument shape. Returns each match with what the holes matched.',
+		].join('\n'),
+		inputSchema: {
+			type: 'object',
+			properties: {
+				pattern: { type: 'string', description: 'The code pattern with $HOLES.' },
+				path: { type: 'string', description: 'File or folder to search. Defaults to the working directory.' },
+				glob: { type: 'string', description: 'Only search files matching this glob, e.g. "*.{ts,tsx}".' },
+			},
+			required: ['pattern'],
+			additionalProperties: false,
+		},
+	},
+	title: input => `Structural search ${JSON.stringify(str(input, 'pattern', false))}${input.glob ? ` in ${input.glob}` : ''}`,
+	paths: (input, ws) => [resolvePath(ws, str(input, 'path', false) || '.')],
+	async run(input, ctx) {
+		let pattern;
+		try {
+			pattern = parsePattern(str(input, 'pattern'));
+		} catch (err) {
+			throw new ToolError((err as Error).message);
+		}
+		const target = resolvePath(ctx.workspace, str(input, 'path', false) || '.');
+		const glob = typeof input.glob === 'string' && input.glob ? input.glob : undefined;
+		const stat = await ctx.workspace.stat(target);
+		let files: string[] = [];
+		if (stat && !stat.isDirectory) {
+			files = [target];
+		} else if (ctx.ripgrep) {
+			const args = ['--hidden', '--glob', '!.git', ...(glob ? ['--glob', glob] : []), ...(pattern.anchor ? ['-l', '--fixed-strings', '-e', pattern.anchor.replace(/^['"`]|['"`]$/g, '')] : ['--files']), '--', target];
+			files = (await runRipgrep(ctx.ripgrep, args, ctx.workspace.roots[0] ?? target, ctx.signal)).split(/\r?\n/).filter(Boolean).map(f => path.resolve(target, f));
+		} else {
+			const re = glob ? globToRegExp(glob, process.platform === 'win32') : undefined;
+			for await (const file of walk(ctx.workspace, target, ctx.signal)) {
+				if (!re || re.test(toSlash(path.relative(target, file))) || re.test(path.basename(file))) {
+					files.push(file);
+				}
+			}
+		}
+		const lines: string[] = [];
+		let count = 0;
+		for (const file of files.slice(0, 5000)) {
+			if (ctx.signal.aborted || count >= 200) {
+				break;
+			}
+			const stats = await ctx.workspace.stat(file);
+			if (!stats || stats.size > 1024 * 1024) {
+				continue;
+			}
+			const text = await ctx.workspace.readText(file).catch(() => '');
+			for (const match of findMatches(pattern, text, file, 200 - count)) {
+				count++;
+				const line = text.slice(0, match.start).split('\n').length;
+				const holes = Object.entries(match.bindings).map(([name, value]) => `$${name} = ${value.replace(/\s+/g, ' ').trim().slice(0, 120)}`).join('; ');
+				lines.push(`${displayPath(ctx.workspace, file)}:${line}: ${match.text.replace(/\s+/g, ' ').slice(0, 200)}${holes ? `\n    ${holes}` : ''}`);
+			}
+		}
+		if (!count) {
+			return { content: 'No matches found.', summary: '0 matches' };
+		}
+		const more = count >= 200 ? '\n(Stopped at 200 matches; narrow the path or glob.)' : '';
+		return { content: truncateOutput(lines.join('\n')) + more, summary: `${count} matches` };
 	},
 };
 
@@ -1300,13 +1377,13 @@ const exitPlanTool: Tool = {
 };
 
 export const BUILTIN_TOOLS: Tool[] = [
-	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, codebaseSearchTool, docsSearchTool,
+	readTool, writeTool, editTool, multiEditTool, lsTool, globTool, grepTool, structuralSearchTool, codebaseSearchTool, docsSearchTool,
 	codeMapTool, memoryTool, bashTool, bashOutputTool, killBashTool, todoTool, webFetchTool,
 	taskTool, skillTool, askTool, exitPlanTool,
 ];
 
 /** Tools a read-only sub-agent may use. */
-export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'CodebaseSearch', 'DocsSearch', 'WebFetch', 'BashOutput', 'Skill']);
+export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'StructuralSearch', 'CodebaseSearch', 'DocsSearch', 'WebFetch', 'BashOutput', 'Skill']);
 
 export function isOutsideWorkspace(tool: Tool, input: Record<string, unknown>, workspace: Workspace): boolean {
 	try {
