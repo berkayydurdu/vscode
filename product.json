@@ -43,6 +43,21 @@
 		"controlUrl": "",
 		"nlsBaseUrl": ""
 	},
+	"trustedExtensionPublishers": [
+		"microsoft",
+		"github",
+		"openai",
+		"vscode",
+		"ms-vscode",
+		"ms-python",
+		"ms-toolsai",
+		"ms-azuretools",
+		"vscjava",
+		"ms-mssql",
+		"ms-playwright",
+		"msjsdiag",
+		"dbaeumer"
+	],
 	"linkProtectionTrustedDomains": [
 		"https://open-vsx.org"
 	],

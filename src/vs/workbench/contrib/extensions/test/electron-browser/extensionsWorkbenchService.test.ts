@@ -500,6 +500,15 @@ suite('ExtensionsWorkbenchServiceTest', () => {
 		assert.strictEqual(testObject.isAutoUpdateDelayed(testObject.local[0]), false);
 	});
 
+	test('test getAutoUpdateDelayRemaining does not trust a publisher by display name', async () => {
+		instantiationService.stub(IProductService, { ...TestProductService, trustedExtensionPublishers: ['microsoft'] });
+		testObject = await anOutdatedExtensionWorkbenchService(Date.now() - (1000 * 60 * 60) /* 1 hour ago */, true, 'Microsoft');
+
+		assert.strictEqual(testObject.local[0].publisher, 'pub');
+		assert.strictEqual(testObject.local[0].publisherDisplayName, 'Microsoft');
+		assert.ok(testObject.getAutoUpdateDelayRemaining(testObject.local[0]) > 0);
+	});
+
 	test('test delayed auto update does not reschedule the marketplace update check', () => runWithFakedTimers({ useFakeTimers: true, startTime: 1000 * 60 * 60 * 3 }, async () => {
 		const local = aLocalExtension('a', { version: '1.0.1' });
 		const gallery = aGalleryExtension(local.manifest.name, {
@@ -1878,9 +1887,9 @@ suite('ExtensionsWorkbenchServiceTest', () => {
 		return workbenchService;
 	}
 
-	async function anOutdatedExtensionWorkbenchService(lastUpdated: number | undefined, isSigned: boolean = true): Promise<ExtensionsWorkbenchService> {
+	async function anOutdatedExtensionWorkbenchService(lastUpdated: number | undefined, isSigned: boolean = true, publisherDisplayName?: string): Promise<ExtensionsWorkbenchService> {
 		const local = aLocalExtension('a', { version: '1.0.1' });
-		const gallery = aGalleryExtension(local.manifest.name, { identifier: local.identifier, version: '1.0.2', lastUpdated, isSigned });
+		const gallery = aGalleryExtension(local.manifest.name, { identifier: local.identifier, version: '1.0.2', lastUpdated, isSigned, ...(publisherDisplayName ? { publisherDisplayName } : {}) });
 		instantiationService.stubPromise(IExtensionManagementService, 'getInstalled', [local]);
 		instantiationService.stubPromise(IExtensionGalleryService, 'query', aPage(gallery));
 		instantiationService.stubPromise(IExtensionGalleryService, 'getCompatibleExtension', gallery);

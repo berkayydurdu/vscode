@@ -1138,7 +1138,8 @@ export class ExtensionManagementService extends CommontExtensionManagementServic
 
 	isPublisherTrusted(extension: IGalleryExtension): boolean {
 		const publisher = extension.publisher.toLowerCase();
-		if (this.defaultTrustedPublishers.includes(publisher) || this.defaultTrustedPublishers.includes(extension.publisherDisplayName.toLowerCase())) {
+		// Nighthawk: match the publisher id only. On Open VSX the display name is set freely by the namespace owner, so it can't be trusted.
+		if (this.defaultTrustedPublishers.includes(publisher)) {
 			return true;
 		}
 
